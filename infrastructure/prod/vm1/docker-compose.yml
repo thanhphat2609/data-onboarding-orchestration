@@ -36,9 +36,10 @@ x-airflow: &airflow
     - ../../../dags:/opt/airflow/dags:ro
     - ../../../scripts:/opt/airflow/scripts:ro
     - airflow-logs:/opt/airflow/logs
+    # This repository's connections and jobs (ADR-0003).
+    - ../../../pipelines/jobs:/opt/airflow/projects/ingestion/jobs:ro
+    - ../../../pipelines/connections:/opt/airflow/projects/ingestion/connections:ro
     # From the data-onboarding-ingestion checkout next to this repository (ADR-0002).
-    - ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/pipelines/jobs:/opt/airflow/projects/ingestion/jobs:ro
-    - ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/pipelines/connections:/opt/airflow/projects/ingestion/connections:ro
     - ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/code/templates:/opt/airflow/projects/ingestion/templates:ro
     - ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/code/control-plane/src:/opt/ingestion/control-plane:ro
     - runs:/opt/ingestion/runs

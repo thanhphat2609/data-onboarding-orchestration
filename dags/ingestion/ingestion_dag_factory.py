@@ -204,7 +204,7 @@ def _doc_md(jf: JobFile) -> str:
     return f"""
 ### {jf.name}
 
-Generated from `pipelines/jobs/{jf.path.name}` of data-onboarding-ingestion by the ingestion DAG factory. Edit the
+Generated from `pipelines/jobs/{jf.path.name}` of this repository by the ingestion DAG factory. Edit the
 YAML file (or the job in the Web UI), not this DAG.
 
 | | |

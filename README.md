@@ -6,7 +6,7 @@ Airflow for the data onboarding platform: one DAG per ingestion job, and (later)
 
 ```
 dags/
-  ingestion/         DAG factory: every pipelines/jobs/<name>.yaml of the ingestion repo -> DAG ingest__<name>
+  ingestion/         DAG factory: every pipelines/jobs/<name>.yaml of this repo -> DAG ingest__<name>
   transformation/    dbt DAGs (later); scheduled on the table Assets ingestion publishes
   common/            settings shared by the factories
 scripts/             pools conn__<name> from the connection files
