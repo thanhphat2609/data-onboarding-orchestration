@@ -1,0 +1,54 @@
+kind: SourceTemplate
+name: sqlserver
+version: 1
+connector: jdbc
+dialect: tsql
+driver: com.microsoft.sqlserver.jdbc.SQLServerDriver
+url: "jdbc:sqlserver://{{ host }}:{{ port }};databaseName={{ database }};encrypt={{ encrypt }};trustServerCertificate={{ trust_server_certificate }};applicationIntent=ReadOnly"
+
+connection_params:
+  host:                     { type: string, required: true, description: "Server name, availability group listener or IP" }
+  port:                     { type: int, default: 1433, min: 1, max: 65535 }
+  database:                 { type: string, required: true }
+  username:                 { type: string, required: true, description: "Dedicated read-only login" }
+  password:                 { type: secret_ref, required: true, description: "Secret reference, never the value: env://VAR (non-prod) or kv://vault/secret (prod)" }
+  encrypt:                  { type: bool, default: true }
+  trust_server_certificate: { type: bool, default: false, description: "Only for test servers with self-signed certificates" }
+
+read_params:
+  fetch_size:       { type: int, default: 10000, min: 100, max: 100000 }
+  partition_column: { type: string, description: "Numeric or date output column used to split the read" }
+  partition_num:    { type: int, default: 4, min: 1, max: 32 }
+  snapshot_column:  { type: string, description: "Adds <column> <= run_ts" }
+
+preflight:
+  preview: "SELECT TOP ({{ limit }}) * FROM ({{ query }}) AS q"
+  count:   "SELECT COUNT_BIG(*) FROM ({{ query }}) AS q"
+  bounds:  "SELECT MIN({{ column }}), MAX({{ column }}) FROM ({{ query }}) AS q"
+
+type_mapping:
+  bit: BOOLEAN
+  tinyint: SMALLINT
+  smallint: SMALLINT
+  int: INT
+  bigint: BIGINT
+  decimal: "DECIMAL({{ precision }}, {{ scale }})"
+  numeric: "DECIMAL({{ precision }}, {{ scale }})"
+  money: DECIMAL(19, 4)
+  real: FLOAT
+  float: DOUBLE
+  char: STRING
+  varchar: STRING
+  nchar: STRING
+  nvarchar: STRING
+  uniqueidentifier: STRING
+  date: DATE
+  datetime: TIMESTAMP(3)
+  datetime2: "TIMESTAMP({{ scale }})"
+  varbinary: BYTES
+
+unsupported_types: [sql_variant, hierarchyid, geography, geometry, xml, datetimeoffset]
+
+runtime_env:
+  SRC_USERNAME: "{{ username }}"
+  SRC_PASSWORD: "{{ password }}"

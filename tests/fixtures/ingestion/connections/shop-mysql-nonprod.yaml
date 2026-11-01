@@ -1,0 +1,10 @@
+kind: Connection
+name: shop-mysql-nonprod
+template: mysql@1
+owner: de-team
+params:
+  host: mysql-source
+  database: shop
+  username: svc_ingest_ro
+  password: env://SHOP_MYSQL_RO_PASSWORD
+  ssl_mode: DISABLED

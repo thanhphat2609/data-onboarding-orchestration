@@ -1,0 +1,128 @@
+# Prod VM 1: Airflow, one container per component. Runs next to the data-onboarding-agent stack (shared PostgreSQL,
+# ingestion ADR-0011) and the data-onboarding-ingestion stack (Flink JobManager, Redpanda, Ingestion API).
+# Deployed by infrastructure/prod/deploy.sh. DRAFT until the prod VMs exist.
+# Secrets: .env next to this file (from .env.example), only on the VM. Source secrets for env:// references are the
+# sources.env data-onboarding-ingestion's deploy writes.
+
+name: orchestration-prod
+
+x-airflow: &airflow
+  # apache/airflow plus confluent-kafka for the fetch task of API jobs (ingestion ADR-0015).
+  build:
+    context: ../../..
+    dockerfile: infrastructure/docker/airflow/Dockerfile
+  image: orchestration-airflow:prod
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD:?}@${METADATA_DB_HOST:-postgres}:5432/airflow
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?}
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:?}
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: Asia/Ho_Chi_Minh
+    # One admin user until Entra ID SSO; its password is written to the file by the api-server.
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:admin
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/passwords.json
+    AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "30"
+    AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL: "30"
+    INGESTION_PROJECT_DIR: /opt/airflow/projects/ingestion
+    INGESTION_RUN_DIR: /opt/ingestion/runs
+    FLINK_REST_URL: http://flink-jobmanager:8081
+    FLINK_SMOKE_JAR: /opt/flink-examples/streaming/WordCount.jar
+    PYTHONPATH: /opt/ingestion/control-plane
+    LANDING_BOOTSTRAP_SERVERS: redpanda:9092
+  volumes:
+    - ../../../dags:/opt/airflow/dags:ro
+    - ../../../scripts:/opt/airflow/scripts:ro
+    - airflow-logs:/opt/airflow/logs
+    # From the data-onboarding-ingestion checkout next to this repository (ADR-0002).
+    - ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/pipelines/jobs:/opt/airflow/projects/ingestion/jobs:ro
+    - ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/pipelines/connections:/opt/airflow/projects/ingestion/connections:ro
+    - ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/code/templates:/opt/airflow/projects/ingestion/templates:ro
+    - ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/code/control-plane/src:/opt/ingestion/control-plane:ro
+    - runs:/opt/ingestion/runs
+    - flink-examples:/opt/flink-examples:ro
+  networks: [default, platform]
+  restart: unless-stopped
+
+services:
+  # Runs once per deploy: migrates the metadata DB and creates the pools from the connection files.
+  airflow-init:
+    <<: *airflow
+    command:
+      - bash
+      - -c
+      - airflow db migrate && python /opt/airflow/scripts/sync_pools.py > /tmp/pools.json && airflow pools import /tmp/pools.json
+    restart: "no"
+
+  # Keeps the pools in step with the connection files between deploys (ADR-0002).
+  airflow-pool-sync:
+    <<: *airflow
+    command: ["bash", "/opt/airflow/scripts/pool_sync_loop.sh"]
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-api-server:
+    <<: *airflow
+    command:
+      - bash
+      - -c
+      - |
+        printf '{"admin": "%s"}' "$$AIRFLOW_ADMIN_PASSWORD" > /opt/airflow/passwords.json && exec airflow api-server
+    environment:
+      <<: *airflow-env
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?}
+    ports:
+      - "8080:8080"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "-s", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  airflow-scheduler:
+    <<: *airflow
+    command: airflow scheduler
+    env_file:
+      - path: ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/infrastructure/prod/vm1/sources.env
+        required: false
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow
+    command: airflow dag-processor
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-triggerer:
+    <<: *airflow
+    command: airflow triggerer
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+networks:
+  default: {}
+  # Created by the data-onboarding-agent stack, which runs the shared PostgreSQL server (ingestion ADR-0011).
+  platform:
+    name: data-platform
+    external: true
+
+volumes:
+  airflow-logs:
+  # Created by the data-onboarding-ingestion stack, so it deploys first.
+  runs:
+    name: ingestion-runs
+    external: true
+  flink-examples:
+    name: ingestion-flink-examples
+    external: true
