@@ -62,8 +62,8 @@ services:
       INGESTION_RUN_DIR: /opt/ingestion/runs
       FLINK_REST_URL: http://flink-jobmanager:8081
       FLINK_SMOKE_JAR: /opt/flink-examples/streaming/WordCount.jar
-      # API jobs (ingestion ADR-0015): the fetch task uses the control plane library and lands records on Redpanda.
-      PYTHONPATH: /opt/ingestion/control-plane
+      # dags/ for `common`; the control plane library for the fetch task of API jobs (ingestion ADR-0015).
+      PYTHONPATH: /opt/airflow/dags:/opt/ingestion/control-plane
       LANDING_BOOTSTRAP_SERVERS: redpanda:9092
     # Values of env://<VAR> references: the fetch task of API jobs calls the API with them.
     env_file:
