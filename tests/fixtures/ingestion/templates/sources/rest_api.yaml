@@ -1,0 +1,51 @@
+kind: SourceTemplate
+name: rest_api
+version: 1
+# Flink never calls the API (ADR-0015). The Airflow task `fetch` pages through the API and writes one message per
+# record to the job's landing topic on Redpanda; Flink then reads that topic between the run's offsets as a bounded
+# table named `landing`. The job's query is Flink SQL over `landing`, so the Flink side is the same for every API.
+connector: kafka
+dialect: flink
+# The DAG factory adds a task `fetch` before `submit` because of this line (not because of `connector: kafka`: a
+# Kafka topic that another system already fills needs no fetch). Value = the fetcher, ingestion.rest_api.
+fetch: rest_api
+
+connection_params:
+  base_url:                { type: string, required: true, description: "For example https://api.example.com/v1, no trailing slash" }
+  auth:                    { type: enum, values: [none, bearer, header, query], default: bearer, description: "How the token is sent: Authorization: Bearer, a named header, or a named query parameter" }
+  auth_name:               { type: string, description: "Header name (auth: header, for example X-API-Key) or query parameter name (auth: query)" }
+  token:                   { type: secret_ref, description: "Secret reference, never the value: env://VAR (non-prod) or kv://vault/secret (prod). Required unless auth is none" }
+  timeout:                 { type: duration, default: 30s, description: "Per request" }
+  max_requests_per_second: { type: int, default: 5, min: 1, max: 100 }
+
+read_params:
+  endpoint:        { type: string, required: true, description: "Path after base_url, for example /orders. {{ ingest_date }} is replaced by the run's date" }
+  query_string:    { type: string, description: "Extra query parameters, for example updated_date={{ ingest_date }}&status=all" }
+  records_path:    { type: string, description: "Dot path to the list of records in the response, for example data.items. Empty: the response is the list" }
+  pagination:      { type: enum, values: [none, page, offset, cursor], default: none }
+  page_param:      { type: string, default: page, description: "page: page number parameter (starts at 1). offset: offset parameter (starts at 0)" }
+  page_size_param: { type: string, default: page_size }
+  page_size:       { type: int, default: 100, min: 1, max: 10000, description: "A shorter page ends the run (page and offset)" }
+  cursor_path:     { type: string, description: "cursor: dot path to the next cursor in the response, for example meta.next_cursor. Empty or missing ends the run" }
+  cursor_param:    { type: string, default: cursor, description: "cursor: query parameter that takes the cursor" }
+  max_pages:       { type: int, default: 1000, min: 1, max: 100000, description: "The run fails beyond this instead of looping forever" }
+
+landing:
+  # One single-partition topic per job; max_active_runs=1 keeps one writer per topic.
+  topic: "ingest.{{ job }}"
+  # The table the job's query reads. Offsets come from the run's fetch task: start inclusive, end exclusive.
+  table: |
+    CREATE TABLE landing (
+      payload STRING,
+      _offset BIGINT METADATA FROM 'offset' VIRTUAL,
+      _fetched_at TIMESTAMP_LTZ(3) METADATA FROM 'timestamp' VIRTUAL
+    ) WITH (
+      'connector' = 'kafka',
+      'topic' = '{{ topic }}',
+      'properties.bootstrap.servers' = '{{ bootstrap_servers }}',
+      'format' = 'raw',
+      'scan.startup.mode' = 'specific-offsets',
+      'scan.startup.specific-offsets' = 'partition:0,offset:{{ start_offset }}',
+      'scan.bounded.mode' = 'specific-offsets',
+      'scan.bounded.specific-offsets' = 'partition:0,offset:{{ end_offset }}'
+    )

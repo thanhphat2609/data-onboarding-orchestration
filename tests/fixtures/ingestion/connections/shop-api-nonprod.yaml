@@ -1,0 +1,8 @@
+kind: Connection
+name: shop-api-nonprod
+template: rest_api@1
+owner: de-team
+params:
+  base_url: http://api-source:8000/v1
+  auth: bearer
+  token: env://SHOP_API_TOKEN

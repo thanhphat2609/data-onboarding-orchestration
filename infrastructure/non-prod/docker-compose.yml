@@ -1,0 +1,118 @@
+# Non-prod Airflow. Start order: data-onboarding-agent (optional, shared PostgreSQL), data-onboarding-ingestion, this.
+# Start: docker compose -f infrastructure/non-prod/docker-compose.yml up -d --build
+# Secrets come from infrastructure/non-prod/.env (created by bootstrap.sh, never committed).
+#
+# Needs a checkout of data-onboarding-ingestion next to this repository (INGESTION_REPO_DIR, ADR-0002): its job,
+# connection and template files, its control plane library and its sources.env are mounted read-only.
+#
+# Metadata DB (ingestion ADR-0011): the platform's shared PostgreSQL server, hosted by the data-onboarding-agent stack,
+# over the Docker network `data-platform`. Without that stack, COMPOSE_PROFILES=local-db in .env (bootstrap.sh's
+# default) starts a local PostgreSQL instead.
+
+name: orchestration-nonprod
+
+services:
+  # Standalone only (profile local-db): same databases and roles as the shared server.
+  postgres:
+    image: postgres:16.15-alpine
+    profiles: [local-db]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run bootstrap.sh to create .env}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD:?}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    mem_limit: 256m
+    restart: unless-stopped
+
+  # All Airflow components in one process tree (api-server, scheduler, dag-processor, triggerer).
+  # Lighter than one container per component; prod uses separate services.
+  airflow:
+    # apache/airflow plus confluent-kafka for the fetch task of API jobs (ingestion ADR-0015).
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/airflow/Dockerfile
+    image: orchestration-airflow:dev
+    # Migrates the database, keeps pools in step with connection files, then runs `airflow standalone`.
+    command: ["bash", "/opt/airflow/start.sh"]
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      # `postgres` = the shared server on data-platform, or the local-db container. METADATA_DB_HOST overrides it.
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD:?}@${METADATA_DB_HOST:-postgres}:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?}
+      AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:?}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: Asia/Ho_Chi_Minh
+      # Non-prod only: no login; Codespaces port forwarding is private to the user.
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+      # Pick up new DAG files and changed job YAML quickly.
+      AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "30"
+      AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL: "30"
+      INGESTION_PROJECT_DIR: /opt/airflow/projects/ingestion
+      INGESTION_RUN_DIR: /opt/ingestion/runs
+      FLINK_REST_URL: http://flink-jobmanager:8081
+      FLINK_SMOKE_JAR: /opt/flink-examples/streaming/WordCount.jar
+      # API jobs (ingestion ADR-0015): the fetch task uses the control plane library and lands records on Redpanda.
+      PYTHONPATH: /opt/ingestion/control-plane
+      LANDING_BOOTSTRAP_SERVERS: redpanda:9092
+    # Values of env://<VAR> references: the fetch task of API jobs calls the API with them.
+    env_file:
+      - path: ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/infrastructure/non-prod/sources.env
+        required: false
+    volumes:
+      # One folder per repository on the shared Airflow (ADR-0001).
+      - ../../dags:/opt/airflow/dags:ro
+      - ../../scripts:/opt/airflow/scripts:ro
+      - ./airflow/start.sh:/opt/airflow/start.sh:ro
+      - airflow-logs:/opt/airflow/logs
+      # From the data-onboarding-ingestion checkout (ADR-0002).
+      - ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/pipelines/jobs:/opt/airflow/projects/ingestion/jobs:ro
+      - ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/pipelines/connections:/opt/airflow/projects/ingestion/connections:ro
+      - ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/code/templates:/opt/airflow/projects/ingestion/templates:ro
+      - ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/code/control-plane/src:/opt/ingestion/control-plane:ro
+      # Resolved job specs for the Flink JobManager (ingestion ADR-0007).
+      - ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/infrastructure/non-prod/data/runs:/opt/ingestion/runs
+      # Flink example JARs for the Phase 1 smoke job (filled by the JobManager image).
+      - flink-examples:/opt/flink-examples:ro
+    networks: [platform, sources]
+    depends_on:
+      # Only with the local-db profile; the shared server is another Compose project, so start.sh waits for it.
+      postgres:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "-s", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    mem_limit: 2g
+    restart: unless-stopped
+
+networks:
+  # Created by the data-onboarding-agent stack or by a bootstrap.sh. Flink, Redpanda and the Ingestion API are on it.
+  platform:
+    name: data-platform
+    external: true
+  # Shared with data-onboarding-ingestion's example sources.
+  sources:
+    name: ingestion-sources
+    external: true
+
+volumes:
+  postgres-data:   # local-db profile only
+  airflow-logs:
+  # Created by the data-onboarding-ingestion stack, so it has to start first.
+  flink-examples:
+    name: ingestion-flink-examples
+    external: true

@@ -1,0 +1,15 @@
+kind: SinkTemplate
+name: adls_parquet
+version: 1
+format: parquet
+uri: "abfss://{{ container }}@{{ storage_account }}.dfs.core.windows.net/parquet/{{ path }}"
+
+params:
+  storage_account:     { type: string, required: true, description: "ADLS Gen2 account with hierarchical namespace" }
+  container:           { type: string, default: raw }
+  path:                { type: string, required: true, description: "<system>/<schema>/<table>" }
+  compression:         { type: enum, values: [snappy, zstd], default: snappy }
+  target_file_size_mb: { type: int, default: 256, min: 16, max: 1024 }
+
+partition_by: [ingest_date]
+publish: rename_partition
