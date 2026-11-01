@@ -30,7 +30,7 @@ x-airflow: &airflow
     INGESTION_RUN_DIR: /opt/ingestion/runs
     FLINK_REST_URL: http://flink-jobmanager:8081
     FLINK_SMOKE_JAR: /opt/flink-examples/streaming/WordCount.jar
-    PYTHONPATH: /opt/ingestion/control-plane
+    PYTHONPATH: /opt/airflow/dags:/opt/ingestion/control-plane
     LANDING_BOOTSTRAP_SERVERS: redpanda:9092
   volumes:
     - ../../../dags:/opt/airflow/dags:ro
