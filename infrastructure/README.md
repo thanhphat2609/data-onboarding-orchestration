@@ -20,7 +20,7 @@ docker compose -f infrastructure/non-prod/docker-compose.yml up -d --build
 | Airflow | 8080 | Airflow 3 in standalone mode; no login in non-prod |
 | PostgreSQL | internal | Only with `COMPOSE_PROFILES=local-db` |
 
-If data-onboarding-ingestion isn't next to this repository, set `INGESTION_REPO_DIR` in `.env`. What Airflow takes from it: [ADR-0002](../docs/adr/0002-repo-contracts.md).
+If data-onboarding-ingestion isn't next to this repository, set `INGESTION_REPO_DIR` in `.env`. What Airflow takes from it (templates and the `fetch` code, not the job files): [ADR-0002](../docs/adr/0002-repo-contracts.md), [ADR-0003](../docs/adr/0003-pipelines-live-here.md).
 
 New jobs appear as DAGs within about 30 seconds and start paused. New connections get their pool within a minute (`POOL_SYNC_INTERVAL`).
 

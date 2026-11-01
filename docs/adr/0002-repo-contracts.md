@@ -1,6 +1,7 @@
 # ADR-0002: What Airflow reads from the other repositories
 
 - Status: Accepted
+- Amended by: [ADR-0003](0003-pipelines-live-here.md) (the job and connection files are in this repository)
 - Date: 2026-11-01
 
 ## Context
@@ -13,8 +14,7 @@ Job specs stay in data-onboarding-ingestion: its Web UI and API write them, and 
 
 | From data-onboarding-ingestion | Mounted at | Used by |
 |---|---|---|
-| `pipelines/jobs/` | `/opt/airflow/projects/ingestion/jobs` | DAG factory |
-| `pipelines/connections/` | `/opt/airflow/projects/ingestion/connections` | DAG factory, pool sync |
+| ~~`pipelines/jobs/`~~, ~~`pipelines/connections/`~~ | | Now in this repository (ADR-0003) |
 | `code/templates/` (schemas, sources, sinks) | `/opt/airflow/projects/ingestion/templates` | DAG factory |
 | `code/control-plane/src/` | `/opt/ingestion/control-plane` (`PYTHONPATH`) | `fetch` task of API jobs |
 | `sources.env` of the environment | container environment | `fetch` task of API jobs (`env://`) |
