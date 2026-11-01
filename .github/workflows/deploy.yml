@@ -1,12 +1,19 @@
-# Deploys Airflow to prod VM 1, only when someone runs this workflow (Actions -> Deploy -> Run workflow); that click is
-# the approval. The commit must be on main and have a green CI run. Every prod setting is a GitHub secret or variable
-# (ingestion ADR-0013): the run writes .env from them (render_env.py), checks it with `docker compose config`, then on
-# VM 1: the file replaced, git checkout <sha>, docker compose build --pull, up -d, prune old images and build cache.
-# Job and connection files need no deploy here: Airflow mounts data-onboarding-ingestion's checkout (ADR-0002).
+# Deploys Airflow to prod VM 1 (ingestion ADR-0012, ADR-0013).
+# - Code: only when someone runs this workflow (Actions -> Deploy -> Run workflow); that click is the approval. The
+#   commit must be on main and have a green CI run. Every prod setting is a GitHub secret or variable: the run writes
+#   .env from them (render_env.py), checks it with `docker compose config`, then on VM 1: the file replaced, git
+#   checkout <sha>, docker compose build --pull, up -d, prune old images and build cache.
+# - Only pipelines/ changed (job and connection files merged from the Web UI's pull requests, ADR-0003): synced to
+#   VM 1 right after CI passes on main, without a click (git checkout, no rebuild). If code changed too, nothing
+#   happens until the workflow is run.
 # Disabled until the repository variable PROD_DEPLOY_ENABLED is "true" (the VMs don't exist yet).
 name: Deploy
 
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       sha:
@@ -31,29 +38,94 @@ env:
   REPO_DIR: ${{ vars.PROD_REPO_DIR || '/opt/data-onboarding-orchestration' }}
 
 jobs:
-  deploy:
-    if: vars.PROD_DEPLOY_ENABLED == 'true' && github.ref == 'refs/heads/main'
+  plan:
+    if: >-
+      vars.PROD_DEPLOY_ENABLED == 'true' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.plan.outputs.sha }}
+      scope: ${{ steps.plan.outputs.scope }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Check the commit
+      - name: SSH key
+        env:
+          SSH_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_deploy ~/.ssh/known_hosts
+      - name: Check the commit and compare with VM 1
         id: plan
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET: ${{ inputs.sha || 'origin/main' }}
+          HOST: ${{ secrets.PROD_VM1_HOST }}
+          TARGET: ${{ inputs.sha || github.event.workflow_run.head_sha || 'origin/main' }}
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           sha=$(git rev-parse "$TARGET")
           if ! git merge-base --is-ancestor "$sha" origin/main; then
             echo "::error::$sha is not on main"; exit 1
           fi
-          green=$(gh run list --workflow CI --commit "$sha" --status success --json databaseId --jq length)
-          if [[ "$green" == 0 ]]; then
-            echo "::error::No green CI run for $sha; wait for CI or fix it first"; exit 1
+          if [[ "$MANUAL" == true ]]; then
+            green=$(gh run list --workflow CI --commit "$sha" --status success --json databaseId --jq length)
+            if [[ "$green" == 0 ]]; then
+              echo "::error::No green CI run for $sha; wait for CI or fix it first"; exit 1
+            fi
           fi
-          git checkout --quiet "$sha"
+          deployed=$(ssh -i ~/.ssh/id_deploy -p "$SSH_PORT" "$SSH_USER@$HOST" "git -C '$REPO_DIR' rev-parse HEAD")
+          changed=$(git diff --name-only "$deployed" "$sha" 2>/dev/null || echo "<unknown commit on VM 1>")
+          printf 'Deployed %s, target %s\nChanged files:\n%s\n' "$deployed" "$sha" "$changed"
+          if [[ "$MANUAL" == true ]]; then
+            scope=full
+          elif [[ -n "$changed" ]] && ! grep -qv '^pipelines/' <<<"$changed"; then
+            scope=pipelines
+          else
+            scope=none
+            [[ -n "$changed" ]] && echo "::notice::Code changed: run the Deploy workflow to deploy $sha"
+          fi
+          echo "Scope: $scope"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+
+  pipelines:
+    needs: plan
+    if: needs.plan.outputs.scope == 'pipelines'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: SSH key
+        env:
+          SSH_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_deploy ~/.ssh/known_hosts
+      - name: Sync pipelines/ on VM 1
+        env:
+          HOST: ${{ secrets.PROD_VM1_HOST }}
+          SHA: ${{ needs.plan.outputs.sha }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "$SSH_PORT" "$SSH_USER@$HOST" \
+            "set -e; cd '$REPO_DIR'; git fetch --prune origin; git show '$SHA:infrastructure/prod/deploy.sh' | bash -s -- '$SHA' --pipelines-only"
+
+  deploy:
+    needs: plan
+    if: needs.plan.outputs.scope == 'full'
+    runs-on: ubuntu-24.04
+    env:
+      SHA: ${{ needs.plan.outputs.sha }}
+      NO_CACHE: ${{ inputs.no_cache && '--no-cache' || '' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
       # Keys from the target commit's example, values from the secret or variable of the same name. Fails before
       # touching the VM if a required one is missing or Compose rejects the result.
       - name: Write .env from secrets and variables
@@ -76,8 +148,6 @@ jobs:
       - name: Deploy VM 1
         env:
           HOST: ${{ secrets.PROD_VM1_HOST }}
-          SHA: ${{ steps.plan.outputs.sha }}
-          NO_CACHE: ${{ inputs.no_cache && '--no-cache' || '' }}
         run: |
           ssh -i ~/.ssh/id_deploy -p "$SSH_PORT" "$SSH_USER@$HOST" \
             "set -e; umask 077; d='$REPO_DIR/infrastructure/prod/vm1'; cat > \"\$d/.env.new\"; mv \"\$d/.env.new\" \"\$d/.env\"" \

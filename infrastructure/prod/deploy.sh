@@ -3,15 +3,18 @@
 #   git -C <repo> fetch --prune origin && git -C <repo> show <sha>:infrastructure/prod/deploy.sh | bash -s -- ...
 # so the script of the target commit runs, not the one currently checked out.
 #
-# Usage: deploy.sh <sha> [--no-cache]
+# Usage: deploy.sh <sha> [--pipelines-only] [--no-cache]
+#   --pipelines-only  only move the checkout to <sha>: Airflow mounts pipelines/ from it; no rebuild, no restart
 #   --no-cache   rebuild every image layer (default: reuse the cache, but always pull newer base images)
 set -euo pipefail
 
 sha="${1:?commit sha}"
 shift
+pipelines_only=false
 no_cache=()
 for arg in "$@"; do
   case "$arg" in
+    --pipelines-only) pipelines_only=true ;;
     --no-cache) no_cache=(--no-cache) ;;
     *) echo "Unknown option $arg" >&2; exit 2 ;;
   esac
@@ -23,6 +26,12 @@ compose=(docker compose -f infrastructure/prod/vm1/docker-compose.yml)
 
 echo "Deploying Airflow: $(git rev-parse --short HEAD) -> ${sha:0:7}"
 git checkout --quiet --detach "$sha"
+
+if [[ "$pipelines_only" == true ]]; then
+  # The DAG processor and the pool sync pick the files up by themselves.
+  echo "Pipelines at ${sha:0:7}"
+  exit 0
+fi
 
 "${compose[@]}" build --pull "${no_cache[@]}"
 "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 600
