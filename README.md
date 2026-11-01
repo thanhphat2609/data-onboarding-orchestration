@@ -2,6 +2,8 @@
 
 Airflow for the data onboarding platform: one DAG per ingestion job, and (later) dbt transformations that run after ingestion publishes a table. This repository decides when and in what order things run. Flink lives in [data-onboarding-ingestion](https://github.com/thanhphat2609/data-onboarding-ingestion), dbt in [data-onboarding-transformation](https://github.com/thanhphat2609/data-onboarding-transformation).
 
+![Architecture](docs/assets/architecture.svg)
+
 ## Repository layout
 
 ```
