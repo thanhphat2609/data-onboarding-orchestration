@@ -1,0 +1,20 @@
+kind: IngestionJob
+name: shop-customers-by-segment-daily
+owner: data-team
+connection: shop-mysql-nonprod
+source:
+  query: |
+    SELECT c.customer_id, c.full_name, s.segment_name
+    FROM customers AS c
+    JOIN segments AS s ON s.segment_id = c.segment_id
+    WHERE c.is_deleted = FALSE
+sink:
+  template: adls_parquet@1
+  params:
+    storage_account: stdatalakedev
+    path: shop/shop/customers_by_segment
+runtime:
+  timeout: 1h
+schedule: 0 2 * * *
+tags:
+  - shop

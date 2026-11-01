@@ -1,0 +1,7 @@
+# What the tests need; Airflow itself is stubbed there (tests/conftest.py) and exercised by the CI image step.
+jsonschema==4.26.0
+pendulum==3.3.0
+pytest==9.1.1
+pyyaml==6.0.3
+requests==2.34.2
+ruff==0.17.2

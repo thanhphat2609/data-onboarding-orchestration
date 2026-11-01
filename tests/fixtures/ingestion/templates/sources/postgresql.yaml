@@ -1,0 +1,53 @@
+kind: SourceTemplate
+name: postgresql
+version: 1
+connector: jdbc
+dialect: postgres
+driver: org.postgresql.Driver
+url: "jdbc:postgresql://{{ host }}:{{ port }}/{{ database }}?sslmode={{ sslmode }}&ApplicationName=ingestion&readOnly=true"
+
+connection_params:
+  host:     { type: string, required: true, description: "Server name or IP; for Azure: <server>.postgres.database.azure.com" }
+  port:     { type: int, default: 5432, min: 1, max: 65535 }
+  database: { type: string, required: true }
+  username: { type: string, required: true, description: "Dedicated read-only role" }
+  password: { type: secret_ref, required: true, description: "Secret reference, never the value: env://VAR (non-prod) or kv://vault/secret (prod)" }
+  sslmode:  { type: enum, values: [disable, prefer, require, verify-ca, verify-full], default: prefer, description: "require or stricter for servers outside the platform network (Azure needs require)" }
+
+read_params:
+  fetch_size:       { type: int, default: 10000, min: 100, max: 100000 }
+  partition_column: { type: string, description: "Numeric or date output column used to split the read" }
+  partition_num:    { type: int, default: 4, min: 1, max: 32 }
+  snapshot_column:  { type: string, description: "Adds <column> <= run_ts" }
+
+# The runner always sets scan.auto-commit=false: the driver only streams with a fetch size outside auto-commit.
+preflight:
+  preview: "SELECT * FROM ({{ query }}) AS q LIMIT {{ limit }}"
+  count:   "SELECT COUNT(*) FROM ({{ query }}) AS q"
+  bounds:  "SELECT MIN({{ column }}), MAX({{ column }}) FROM ({{ query }}) AS q"
+
+type_mapping:
+  boolean: BOOLEAN
+  smallint: SMALLINT
+  integer: INT
+  bigint: BIGINT
+  numeric: "DECIMAL({{ precision }}, {{ scale }})"
+  real: FLOAT
+  double precision: DOUBLE
+  character: STRING
+  character varying: STRING
+  text: STRING
+  uuid: STRING
+  json: STRING
+  jsonb: STRING
+  date: DATE
+  time without time zone: "TIME({{ scale }})"
+  timestamp without time zone: "TIMESTAMP({{ scale }})"
+  timestamp with time zone: "TIMESTAMP_LTZ({{ scale }})"
+  bytea: BYTES
+
+unsupported_types: [interval, money, point, line, polygon, circle, inet, cidr, tsvector, xml, "ARRAY"]
+
+runtime_env:
+  SRC_USERNAME: "{{ username }}"
+  SRC_PASSWORD: "{{ password }}"
