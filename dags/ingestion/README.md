@@ -4,7 +4,7 @@ Mounted on Airflow at `/opt/airflow/dags/ingestion/` ([ingestion ADR-0008](https
 
 ## `ingestion_dag_factory.py`
 
-One Python file that turns every `pipelines/jobs/<name>.yaml` of data-onboarding-ingestion into its own DAG `ingest__<name>`. Nobody writes a DAG per job; the Web UI only writes YAML.
+One Python file that turns every `pipelines/jobs/<name>.yaml` of this repository into its own DAG `ingest__<name>`. Nobody writes a DAG per job; the Web UI only writes YAML.
 
 | Job field | DAG |
 |---|---|
