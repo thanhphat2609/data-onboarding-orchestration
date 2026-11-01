@@ -1,0 +1,21 @@
+kind: IngestionJob
+name: crm-customers-daily
+owner: data-team
+connection: crm-sqlserver-nonprod
+source:
+  query: |
+    SELECT customer_id, full_name, segment_id, updated_at
+    FROM dbo.customers
+    WHERE is_deleted = 0
+  read:
+    partition_column: customer_id
+sink:
+  template: adls_parquet@1
+  params:
+    storage_account: stdatalakedev
+    path: crm/dbo/customers
+runtime:
+  timeout: 1h
+schedule: 0 2 * * *
+tags:
+  - crm

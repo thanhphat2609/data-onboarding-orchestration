@@ -1,0 +1,29 @@
+kind: IngestionJob
+name: shop-api-orders-daily
+owner: data-team
+connection: shop-api-nonprod
+source:
+  query: |
+    SELECT
+      CAST(JSON_VALUE(payload, '$.order_id') AS BIGINT) AS order_id,
+      JSON_VALUE(payload, '$.status') AS status,
+      payload,
+      _fetched_at
+    FROM landing
+  read:
+    endpoint: /orders
+    query_string: updated_date={{ ingest_date }}
+    records_path: data
+    pagination: page
+    page_size: 50
+sink:
+  template: adls_parquet@1
+  params:
+    storage_account: stdatalakedev
+    path: shop/api/orders
+runtime:
+  timeout: 30m
+schedule: 0 3 * * *
+tags:
+  - shop
+  - api

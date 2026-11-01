@@ -1,0 +1,58 @@
+kind: SourceTemplate
+name: mysql
+version: 1
+connector: jdbc
+dialect: mysql
+driver: com.mysql.cj.jdbc.Driver
+# useCursorFetch streams with the fetch size; without it the driver loads the whole result set into memory.
+url: "jdbc:mysql://{{ host }}:{{ port }}/{{ database }}?sslMode={{ ssl_mode }}&useCursorFetch=true&zeroDateTimeBehavior=CONVERT_TO_NULL&tinyInt1isBit=true"
+
+connection_params:
+  host:     { type: string, required: true, description: "Server name or IP; for Azure: <server>.mysql.database.azure.com" }
+  port:     { type: int, default: 3306, min: 1, max: 65535 }
+  database: { type: string, required: true }
+  username: { type: string, required: true, description: "Dedicated read-only user (SELECT only)" }
+  password: { type: secret_ref, required: true, description: "Secret reference, never the value: env://VAR (non-prod) or kv://vault/secret (prod)" }
+  ssl_mode: { type: enum, values: [DISABLED, PREFERRED, REQUIRED, VERIFY_CA, VERIFY_IDENTITY], default: PREFERRED, description: "REQUIRED or stricter for servers outside the platform network (Azure needs REQUIRED)" }
+
+read_params:
+  fetch_size:       { type: int, default: 10000, min: 100, max: 100000 }
+  partition_column: { type: string, description: "Numeric or date output column used to split the read" }
+  partition_num:    { type: int, default: 4, min: 1, max: 32 }
+  snapshot_column:  { type: string, description: "Adds <column> <= run_ts" }
+
+preflight:
+  preview: "SELECT * FROM ({{ query }}) AS q LIMIT {{ limit }}"
+  count:   "SELECT COUNT(*) FROM ({{ query }}) AS q"
+  bounds:  "SELECT MIN({{ column }}), MAX({{ column }}) FROM ({{ query }}) AS q"
+
+type_mapping:
+  tinyint(1): BOOLEAN
+  bit(1): BOOLEAN
+  tinyint: TINYINT
+  smallint: SMALLINT
+  mediumint: INT
+  int: INT
+  bigint: BIGINT
+  decimal: "DECIMAL({{ precision }}, {{ scale }})"
+  float: FLOAT
+  double: DOUBLE
+  char: STRING
+  varchar: STRING
+  text: STRING
+  enum: STRING
+  json: STRING
+  date: DATE
+  time: "TIME({{ scale }})"
+  datetime: "TIMESTAMP({{ scale }})"
+  timestamp: "TIMESTAMP_LTZ({{ scale }})"
+  year: INT
+  binary: BYTES
+  varbinary: BYTES
+  blob: BYTES
+
+unsupported_types: [geometry, point, linestring, polygon, set, "bit(n>1)"]
+
+runtime_env:
+  SRC_USERNAME: "{{ username }}"
+  SRC_PASSWORD: "{{ password }}"

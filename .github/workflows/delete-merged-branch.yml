@@ -1,0 +1,53 @@
+# Deletes a pull request's branch once the pull request is merged (closed without merging: kept).
+# Run by hand (Actions -> Delete merged branches -> Run workflow) to clean up branches merged before this existed.
+# A branch is only deleted while it still points at the commit that was merged, so new work pushed to it
+# afterwards is never lost. The default branch and branches from forks are never touched.
+name: Delete merged branches
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+
+permissions:
+  contents: write        # delete branches
+  pull-requests: read    # list merged pull requests (manual run)
+
+jobs:
+  delete:
+    name: Delete merged branch
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: Delete the branch of the merged pull request
+        if: github.event_name == 'pull_request'
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [ "$HEAD_REPO" != "$REPO" ] || [ "$BRANCH" = "$DEFAULT_BRANCH" ]; then
+            echo "Skipped: $HEAD_REPO:$BRANCH"; exit 0
+          fi
+          tip=$(gh api "repos/$REPO/git/ref/heads/$BRANCH" --jq .object.sha 2>/dev/null || true)
+          if [ -z "$tip" ]; then echo "Already deleted: $BRANCH"; exit 0; fi
+          if [ "$tip" != "$HEAD_SHA" ]; then echo "Kept $BRANCH: new commits after the merge"; exit 0; fi
+          gh api -X DELETE "repos/$REPO/git/refs/heads/$BRANCH"
+          echo "Deleted $BRANCH"
+
+      - name: Delete every branch whose pull request was merged
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          gh api --paginate "repos/$REPO/pulls?state=closed&per_page=100" \
+            --jq ".[] | select(.merged_at != null and .head.repo.full_name == \"$REPO\") | \"\(.head.ref) \(.head.sha)\"" |
+          while read -r branch sha; do
+            [ "$branch" = "$DEFAULT_BRANCH" ] && continue
+            tip=$(gh api "repos/$REPO/git/ref/heads/$branch" --jq .object.sha 2>/dev/null || true)
+            if [ -z "$tip" ]; then continue; fi
+            if [ "$tip" != "$sha" ]; then echo "Kept $branch: new commits after the merge"; continue; fi
+            gh api -X DELETE "repos/$REPO/git/refs/heads/$branch" && echo "Deleted $branch"
+          done

@@ -1,0 +1,71 @@
+# Checks on every pull request and every push to main. Nothing is deployed here; a green run on main is what the Deploy
+# workflow waits for. Same flow as data-onboarding-ingestion (its ADR-0012).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python (lint, tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Ruff
+        run: |
+          ruff check --no-cache dags scripts tests
+          ruff format --no-cache --check dags scripts tests
+      - name: Pytest (offline, fixtures instead of the ingestion repository)
+        run: pytest -q
+
+  docker:
+    name: Compose files, image build, DAGs parse
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Shell scripts parse
+        run: for f in $(git ls-files '*.sh'); do bash -n "$f"; done
+      - name: Dummy .env files
+        run: |
+          for example in $(git ls-files '*.env.example'); do
+            sed 's/__GENERATE__/ci-dummy-Aa1/' "$example" > "${example%.example}"
+          done
+      - name: Compose files are valid
+        run: |
+          for file in $(git ls-files '*docker-compose.yml'); do
+            echo "::group::$file"
+            docker compose --env-file "$(dirname "$file")/.env" -f "$file" config --quiet
+            echo "::endgroup::"
+          done
+      - name: Build the image (not pushed)
+        run: docker compose -f infrastructure/non-prod/docker-compose.yml build airflow
+      - name: Real Airflow parses every fixture job into a DAG
+        run: |
+          docker run --rm \
+            -v "$PWD/dags:/opt/airflow/dags:ro" \
+            -v "$PWD/tests/fixtures/ingestion:/opt/airflow/projects/ingestion:ro" \
+            -e AIRFLOW__CORE__LOAD_EXAMPLES=false \
+            -e PYTHONPATH=/opt/airflow/dags \
+            orchestration-airflow:dev bash -c '
+              set -e
+              airflow db migrate >/dev/null
+              airflow dags list-import-errors --local
+              airflow dags list --local --output plain | tee /tmp/dags
+              test "$(grep -c "^ingest__" /tmp/dags)" = 4
+            '

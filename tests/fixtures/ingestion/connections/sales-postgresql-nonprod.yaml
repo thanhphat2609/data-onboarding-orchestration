@@ -1,0 +1,10 @@
+kind: Connection
+name: sales-postgresql-nonprod
+template: postgresql@1
+owner: de-team
+params:
+  host: postgres-source
+  database: sales
+  username: svc_ingest_ro
+  password: env://SALES_POSTGRES_RO_PASSWORD
+  sslmode: disable

@@ -1,0 +1,20 @@
+kind: IngestionJob
+name: sales-orders-daily
+owner: data-team
+connection: sales-postgresql-nonprod
+source:
+  query: |
+    SELECT order_id, customer_id, amount, status, created_at
+    FROM public.orders
+  read:
+    partition_column: order_id
+sink:
+  template: adls_parquet@1
+  params:
+    storage_account: stdatalakedev
+    path: sales/public/orders
+runtime:
+  timeout: 1h
+schedule: 0 2 * * *
+tags:
+  - sales
