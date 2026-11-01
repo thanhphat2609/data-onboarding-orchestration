@@ -75,9 +75,10 @@ services:
       - ../../scripts:/opt/airflow/scripts:ro
       - ./airflow/start.sh:/opt/airflow/start.sh:ro
       - airflow-logs:/opt/airflow/logs
+      # The connections and jobs are this repository's files, merged from the Web UI's pull requests (ADR-0003).
+      - ../../pipelines/jobs:/opt/airflow/projects/ingestion/jobs:ro
+      - ../../pipelines/connections:/opt/airflow/projects/ingestion/connections:ro
       # From the data-onboarding-ingestion checkout (ADR-0002).
-      - ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/pipelines/jobs:/opt/airflow/projects/ingestion/jobs:ro
-      - ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/pipelines/connections:/opt/airflow/projects/ingestion/connections:ro
       - ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/code/templates:/opt/airflow/projects/ingestion/templates:ro
       - ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/code/control-plane/src:/opt/ingestion/control-plane:ro
       # Resolved job specs for the Flink JobManager (ingestion ADR-0007).
