@@ -39,6 +39,7 @@ def example_keys(path: str) -> list[tuple[str, bool]]:
 def render(
     keys: list[tuple[str, bool]], secrets: dict, variables: dict, all_required: bool
 ) -> tuple[list[str], list[str]]:
+    """The ``KEY='value'`` lines, and the problems found (missing or unsafe values); never prints a value."""
     lines, problems = [], []
     for key, required in keys:
         if key in variables and SENSITIVE_RE.search(key):
@@ -66,6 +67,7 @@ def placeholders(secrets: dict, variables: dict) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
+    """Writes the .env file and returns 0; with problems it prints them as workflow errors and returns 1."""
     args = [a for a in argv if not a.startswith("--")]
     if len(args) != 2:
         print(__doc__)

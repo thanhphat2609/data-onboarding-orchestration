@@ -61,6 +61,7 @@ class InvalidJobFile(Exception):
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
+    """Reads a YAML file that must be a mapping."""
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise InvalidJobFile(f"{path.name} is not a YAML mapping")
@@ -68,6 +69,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def _schema_errors(document: dict[str, Any], schema_name: str) -> list[str]:
+    """One message per violation of the JSON Schema ``schema_name`` (from the ingestion repository)."""
     schema_path = TEMPLATES_DIR / "schemas" / f"{schema_name}.schema.json"
     validator = Draft7Validator(json.loads(schema_path.read_text(encoding="utf-8")))
     return [
@@ -77,6 +79,7 @@ def _schema_errors(document: dict[str, Any], schema_name: str) -> list[str]:
 
 
 def _load_template(kind_dir: str, ref: str) -> dict[str, Any]:
+    """Reads a source or sink template and checks that its version is the one asked for."""
     name, _, version = ref.partition("@")
     path = TEMPLATES_DIR / kind_dir / f"{name}.yaml"
     if not path.exists():
@@ -97,14 +100,17 @@ class JobFile:
 
     @property
     def name(self) -> str:
+        """The job's name, which is also its file name."""
         return self.job["name"]
 
     @property
     def dag_id(self) -> str:
+        """The Airflow DAG id, ``ingest__<name>``."""
         return f"{DAG_PREFIX}{self.name}"
 
     @property
     def source_type(self) -> str:
+        """The source template's name without its version, for example ``mysql``."""
         return self.connection["template"].partition("@")[0]
 
     @property
@@ -123,6 +129,7 @@ class JobFile:
 
 
 def load_job(path: Path) -> JobFile:
+    """Reads a job file with its connection and templates; raises InvalidJobFile with a one-line reason."""
     job = _load_yaml(path)
     errors = _schema_errors(job, "ingestion-job")
     if errors:
@@ -166,6 +173,7 @@ def load_jobs() -> tuple[list[JobFile], dict[str, str]]:
 
 
 def parse_duration(value: str) -> timedelta:
+    """Turns ``30s``, ``15m`` or ``2h`` into a timedelta."""
     amount, unit = int(value[:-1]), value[-1]
     return {"s": timedelta(seconds=amount), "m": timedelta(minutes=amount), "h": timedelta(hours=amount)}[unit]
 
@@ -181,6 +189,7 @@ def resolve_ingest_date(override: str | None, run_moment: pendulum.DateTime) -> 
 
 
 def _flink(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+    """One call to the Flink JobManager's REST API; the JSON answer, or an empty dict."""
     response = requests.request(method, f"{FLINK_REST_URL}{path}", timeout=30, **kwargs)
     response.raise_for_status()
     return response.json() if response.content else {}
@@ -200,6 +209,7 @@ def upload_jar(jar: Path) -> str:
 
 
 def _doc_md(jf: JobFile) -> str:
+    """The Markdown shown on the DAG page in Airflow."""
     job = jf.job
     return f"""
 ### {jf.name}
@@ -223,6 +233,11 @@ YAML file (or the job in the Web UI), not this DAG.
 
 
 def build_dag(jf: JobFile) -> DAG:
+    """The DAG ``ingest__<name>`` of one job: validate, optional fetch, submit, wait.
+
+    One active run at a time, no retries (a retry restarts the whole run in Phase 5), tasks drawn from the pool
+    ``conn__<connection>``, and an ``ingest_date`` parameter for backfills.
+    """
     job = jf.job
     runtime = job.get("runtime", {})
     timeout = parse_duration(runtime.get("timeout", DEFAULT_TIMEOUT))
@@ -278,11 +293,12 @@ def build_dag(jf: JobFile) -> DAG:
 
         @task
         def submit(run: dict[str, Any]) -> str:
+            """Starts the Flink job of this run and returns its id (the WordCount smoke job for now)."""
             if "landing" in run:
                 # The runner (Phase 4) reads exactly this range as the table `landing` (landing_table_sql).
                 log.info("Landed: %s", run["landing"])
             # Phase 1 smoke job. Phase 4 runs the PyFlink runner instead: the flink-python JAR with
-            # entryClass PythonDriver and programArgsList ["-py", <runner>/main.py, "--spec", <path>].
+            # entryClass PythonDriver and programArgsList ["-py", <runner>/main.py, "--job", <path>].
             jar_id = upload_jar(SMOKE_JAR)
             result = _flink(
                 "POST", f"/jars/{jar_id}/run", json={"parallelism": run["parallelism"], "programArgsList": []}

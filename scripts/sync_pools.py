@@ -17,6 +17,7 @@ DEFAULT_MAX_CONCURRENT_RUNS = 2
 
 
 def pools() -> dict[str, dict[str, object]]:
+    """The pool ``conn__<name>`` of every connection file, sized by its ``max_concurrent_runs``."""
     result: dict[str, dict[str, object]] = {}
     for path in sorted(CONNECTIONS_DIR.glob("*.yaml")):
         connection = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
