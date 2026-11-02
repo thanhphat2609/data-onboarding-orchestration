@@ -1,0 +1,15 @@
+kind: IngestionJob
+name: shop-orders-daily
+owner: data-team
+connection: shop-mysql-connection
+source:
+  query: |
+    SELECT order_id, customer_id
+    FROM orders
+    LIMIT 10
+sink:
+  template: adls_parquet@1
+  params:
+    storage_account: dataonboardingingestion
+    path: landing
+schedule: 0 2 * * *
