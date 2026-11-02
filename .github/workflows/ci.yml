@@ -31,6 +31,8 @@ jobs:
         run: |
           ruff check --no-cache dags scripts tests
           ruff format --no-cache --check dags scripts tests
+      - name: Vulture (dead code)
+        run: vulture
       - name: Pytest (offline, fixtures instead of the ingestion repository)
         run: pytest -q
 

@@ -6,5 +6,10 @@ extend-exclude = ["tests/fixtures"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM"]
 
+# Dead code finder: `vulture` in CI lists functions, classes and variables that nothing uses. Delete what it finds.
+[tool.vulture]
+paths = ["dags", "scripts", "infrastructure/prod/render_env.py"]
+min_confidence = 60
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

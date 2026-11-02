@@ -35,10 +35,18 @@ A Codespace of this repository does all of this by itself: it clones data-onboar
 ```bash
 pip install -r requirements-dev.txt
 ruff check dags scripts tests && ruff format --check dags scripts tests
+vulture          # unused code
 pytest -q
 ```
 
 CI also builds the image and parses the fixture jobs with real Airflow.
+
+### Comments and dead code
+
+- Comments say **why** (a constraint, a decision, an ADR), not what the next line does. A module starts with a docstring.
+- A public function gets a one- or two-line docstring when its name and types don't tell the whole story: what it returns, when it raises, what it changes. Functions of about 15 lines or more always get one.
+- No commented-out code; Git keeps history.
+- When a change makes a function, file or setting unused, delete it in the same pull request, with its tests and docs. `vulture` fails CI on unused code; if the use is outside what it reads (a hook, another repository), add the name to `ignore_names` in `pyproject.toml` with a comment saying who uses it.
 
 ## Documentation
 
