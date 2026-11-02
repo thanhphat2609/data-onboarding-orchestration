@@ -1,0 +1,9 @@
+kind: Connection
+name: shop-mysql-connection
+template: mysql@1
+owner: de-team
+params:
+  host: mysql-source
+  database: shop
+  password: env://SHOP_MYSQL_RO_PASSWORD
+  username: svc_ingest_ro
