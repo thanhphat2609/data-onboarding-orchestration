@@ -1,6 +1,6 @@
 # data-onboarding-orchestration
 
-Airflow for the data onboarding platform: one DAG per ingestion job, and (later) dbt transformations that run after ingestion publishes a table. This repository decides when and in what order things run. Flink lives in [data-onboarding-ingestion](https://github.com/thanhphat2609/data-onboarding-ingestion), dbt in [data-onboarding-transformation](https://github.com/thanhphat2609/data-onboarding-transformation).
+Airflow for the data onboarding platform: one DAG per ingestion job, and one DAG per dbt transformation file, which runs after the ingestion tables it reads are loaded. This repository decides when and in what order things run. Flink lives in [data-onboarding-ingestion](https://github.com/thanhphat2609/data-onboarding-ingestion), dbt in [data-onboarding-transformation](https://github.com/thanhphat2609/data-onboarding-transformation).
 
 ![Architecture](docs/assets/architecture.svg)
 
@@ -9,7 +9,7 @@ Airflow for the data onboarding platform: one DAG per ingestion job, and (later)
 ```
 dags/
   ingestion/         DAG factory: every pipelines/jobs/<name>.yaml of this repo -> DAG ingest__<name>
-  transformation/    dbt DAGs (later); scheduled on the table Assets ingestion publishes
+  transformation/    one DAG per pipelines/transformations/*.yaml; scheduled on the table Assets ingestion publishes
   common/            settings shared by the factories
 scripts/             pools conn__<name> from the connection files
 tests/               offline tests; fixtures/ingestion/ stands in for the ingestion repo
@@ -54,6 +54,7 @@ CI also builds the image and parses the fixture jobs with real Airflow.
 |---|---|
 | [ADR-0001](docs/adr/0001-orchestration-repo.md) | Why Airflow has its own repository |
 | [ADR-0002](docs/adr/0002-repo-contracts.md) | What Airflow reads from the other repositories |
+| [ADR-0004](docs/adr/0004-transformation-dags.md) | Transformation DAGs from YAML, dbt-duckdb in the image, Assets between DAGs ([plan](docs/plans/0001-transformation-dags.md)) |
 | [dags/ingestion/README.md](dags/ingestion/README.md) | The ingestion DAG factory |
 | [infrastructure/README.md](infrastructure/README.md) | Running it, non-prod and prod |
 | [docs/postgresql.md](docs/postgresql.md) | The `airflow` and `platform` databases |

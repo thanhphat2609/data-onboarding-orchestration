@@ -28,6 +28,8 @@ x-airflow: &airflow
     AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL: "30"
     INGESTION_PROJECT_DIR: /opt/airflow/projects/ingestion
     INGESTION_RUN_DIR: /opt/ingestion/runs
+    TRANSFORMATION_PROJECT_DIR: /opt/airflow/projects/transformation
+    TRANSFORMATION_JOBS_DIR: /opt/airflow/pipelines/transformations
     FLINK_REST_URL: http://flink-jobmanager:8081
     FLINK_SMOKE_JAR: /opt/flink-examples/streaming/WordCount.jar
     PYTHONPATH: /opt/airflow/dags:/opt/ingestion/control-plane
@@ -39,11 +41,17 @@ x-airflow: &airflow
     # This repository's connections and jobs (ADR-0003).
     - ../../../pipelines/jobs:/opt/airflow/projects/ingestion/jobs:ro
     - ../../../pipelines/connections:/opt/airflow/projects/ingestion/connections:ro
+    # One YAML file per transformation DAG (ADR-0004).
+    - ../../../pipelines/transformations:/opt/airflow/pipelines/transformations:ro
     # From the data-onboarding-ingestion checkout next to this repository (ADR-0002).
     - ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/code/templates:/opt/airflow/projects/ingestion/templates:ro
     - ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/code/control-plane/src:/opt/ingestion/control-plane:ro
     - runs:/opt/ingestion/runs
     - flink-examples:/opt/flink-examples:ro
+    # dbt project of data-onboarding-transformation (ADR-0004) and the DuckDB file dbt writes. DuckDB has one writer:
+    # only the scheduler's task runs touch the file, serialised by the pool dbt_duckdb.
+    - ${TRANSFORMATION_REPO_DIR:-../../../../data-onboarding-transformation}:/opt/airflow/projects/transformation:ro
+    - dbt-duckdb:/opt/dbt/data
   networks: [default, platform]
   restart: unless-stopped
 
@@ -120,6 +128,7 @@ networks:
 
 volumes:
   airflow-logs:
+  dbt-duckdb:
   # Created by the data-onboarding-ingestion stack, so it deploys first.
   runs:
     name: ingestion-runs

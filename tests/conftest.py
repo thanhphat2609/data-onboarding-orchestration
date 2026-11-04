@@ -14,6 +14,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures" / "ingestion"
+TRANSFORMATION_FIXTURES = ROOT / "tests" / "fixtures" / "transformation"
 
 
 class StubDag:
@@ -23,6 +24,7 @@ class StubDag:
         self.dag_id = kwargs["dag_id"]
         self.kwargs = kwargs
         self.tasks: list[str] = []
+        self.task_kwargs: dict[str, dict[str, Any]] = {}
 
     def __enter__(self) -> StubDag:
         StubDag.current = self
@@ -32,16 +34,20 @@ class StubDag:
         StubDag.current = None
 
 
-def _task(function: Any = None, **_: Any) -> Any:
+def _task(function: Any = None, **kwargs: Any) -> Any:
     def decorate(fn: Any) -> Any:
         def call(*__: Any) -> str:
             assert StubDag.current is not None
             StubDag.current.tasks.append(fn.__name__)
+            StubDag.current.task_kwargs[fn.__name__] = kwargs
             return fn.__name__
 
         return call
 
     return decorate(function) if function else decorate
+
+
+_task.bash = _task  # type: ignore[attr-defined]  # @task.bash(...) records like @task(...)
 
 
 @pytest.fixture(scope="session")
@@ -51,8 +57,21 @@ def factory() -> Any:
     sdk.Param = lambda *args, **kwargs: (args, kwargs)  # type: ignore[attr-defined]
     sdk.get_current_context = dict  # type: ignore[attr-defined]
     sdk.task = _task  # type: ignore[attr-defined]
+    sdk.Asset = lambda name: f"asset:{name}"  # type: ignore[attr-defined]
     sys.modules["airflow"] = types.ModuleType("airflow")
     sys.modules["airflow.sdk"] = sdk
     os.environ["INGESTION_PROJECT_DIR"] = str(FIXTURES)
-    sys.path[:0] = [str(ROOT / "dags"), str(ROOT / "dags" / "ingestion"), str(ROOT / "scripts")]
+    os.environ["TRANSFORMATION_JOBS_DIR"] = str(TRANSFORMATION_FIXTURES / "jobs")
+    sys.path[:0] = [
+        str(ROOT / "dags"),
+        str(ROOT / "dags" / "ingestion"),
+        str(ROOT / "dags" / "transformation"),
+        str(ROOT / "scripts"),
+    ]
     return importlib.import_module("ingestion_dag_factory")
+
+
+@pytest.fixture(scope="session")
+def transformation_factory(factory: Any) -> Any:
+    """The transformation DAG factory, loaded after ``factory`` has installed the airflow.sdk stub."""
+    return importlib.import_module("transformation_dag_factory")

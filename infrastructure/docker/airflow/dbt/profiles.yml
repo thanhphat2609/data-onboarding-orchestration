@@ -1,0 +1,11 @@
+# dbt profile for the transformation DAGs. The profile name must match `profile:` in the transformation repository's
+# dbt_project.yml. The DuckDB file lives on the dbt-duckdb volume; DuckDB allows one writer, so the DAGs share the
+# pool `dbt_duckdb` (1 slot).
+transformation:
+  target: default
+  outputs:
+    default:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH') }}"
+      threads: 4
+      extensions: [httpfs, azure, parquet]

@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-01
+- Amended by: [ADR-0004](0004-transformation-dags.md) (dbt-duckdb runs in the Airflow image)
 - Supersedes: the hosting part of [data-onboarding-ingestion ADR-0008](https://github.com/thanhphat2609/data-onboarding-ingestion/blob/main/docs/adr/0008-airflow-dag-per-job.md)
 
 ## Context
@@ -11,7 +12,7 @@ Ingestion ADR-0008 kept Airflow's image and Compose files in data-onboarding-ing
 ## Decision
 
 - This repository holds Airflow only: image, Compose files, deploy, DAG factories and scripts. It decides **when and in what order** things run.
-- **No Flink and no dbt in the Airflow image.** Flink is called over its REST API. dbt will run in an image built by data-onboarding-transformation, started by the DAG.
+- **No Flink in the Airflow image.** Flink is called over its REST API. ~~dbt will run in an image built by data-onboarding-transformation~~: dbt-duckdb is in the Airflow image after all (ADR-0004).
 - Everything in the ingestion repository's DAG and pool logic moves here unchanged in behaviour: DAG ids `ingest__<name>`, pools `conn__<name>`, one DAG per job file.
 - Each repository's DAGs live in one folder, `dags/<repository>/`, with a DAG id prefix per repository. Shared settings are in `dags/common/`.
 - Transformation DAGs will be scheduled on the table Assets the ingestion DAGs publish (Phase 5 of ingestion's roadmap), so neither DAG refers to the other.

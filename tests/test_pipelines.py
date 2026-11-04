@@ -11,6 +11,7 @@ from conftest import FIXTURES, ROOT
 from jsonschema import Draft7Validator
 
 SCHEMAS = FIXTURES / "templates" / "schemas"
+TRANSFORMATION_SCHEMA = ROOT / "dags" / "transformation" / "schemas" / "transformation-job.schema.json"
 FILES = sorted((ROOT / "pipelines").glob("*/*.yaml"))
 
 
@@ -21,7 +22,25 @@ def validator(schema_file: str) -> Draft7Validator:
 @pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.name}")
 def test_file_matches_its_schema_and_name(path: Path) -> None:
     document = yaml.safe_load(path.read_text(encoding="utf-8"))
-    schema = "connection.schema.json" if path.parent.name == "connections" else "ingestion-job.schema.json"
-    errors = [e.message for e in validator(schema).iter_errors(document)]
+    if path.parent.name == "transformations":
+        schema_validator = Draft7Validator(json.loads(TRANSFORMATION_SCHEMA.read_text(encoding="utf-8")))
+    else:
+        schema_validator = validator(
+            "connection.schema.json" if path.parent.name == "connections" else "ingestion-job.schema.json"
+        )
+    errors = [e.message for e in schema_validator.iter_errors(document)]
+    assert errors == []
+    assert document["name"] == path.stem
+
+
+@pytest.mark.parametrize(
+    "path", sorted((ROOT / "tests" / "fixtures" / "transformation" / "jobs").glob("*.yaml")), ids=lambda p: p.name
+)
+def test_transformation_fixture_matches_its_schema(path: Path) -> None:
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    errors = [
+        e.message
+        for e in Draft7Validator(json.loads(TRANSFORMATION_SCHEMA.read_text(encoding="utf-8"))).iter_errors(document)
+    ]
     assert errors == []
     assert document["name"] == path.stem

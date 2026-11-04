@@ -14,11 +14,19 @@ import yaml
 
 CONNECTIONS_DIR = Path(os.environ.get("INGESTION_PROJECT_DIR", "/opt/airflow/projects/ingestion")) / "connections"
 DEFAULT_MAX_CONCURRENT_RUNS = 2
+# Every transformation task draws from it: DuckDB allows one writer, so one dbt command runs at a time (ADR-0004).
+DBT_POOL = "dbt_duckdb"
 
 
 def pools() -> dict[str, dict[str, object]]:
-    """The pool ``conn__<name>`` of every connection file, sized by its ``max_concurrent_runs``."""
-    result: dict[str, dict[str, object]] = {}
+    """The pool ``dbt_duckdb``, and ``conn__<name>`` per connection file (sized by ``max_concurrent_runs``)."""
+    result: dict[str, dict[str, object]] = {
+        DBT_POOL: {
+            "slots": 1,
+            "description": "One dbt command at a time on the DuckDB file",
+            "include_deferred": False,
+        }
+    }
     for path in sorted(CONNECTIONS_DIR.glob("*.yaml")):
         connection = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         name = connection.get("name", path.stem)

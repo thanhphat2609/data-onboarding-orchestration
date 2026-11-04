@@ -31,6 +31,7 @@ import pendulum
 import requests
 import yaml
 from airflow.sdk import DAG, Param, get_current_context, task
+from common.assets import ingestion_asset
 from common.platform import START_DATE, TIMEZONE
 from jsonschema import Draft7Validator
 
@@ -306,7 +307,8 @@ def build_dag(jf: JobFile) -> DAG:
             log.info("Submitted Flink job %s (ingest_date %s)", result["jobid"], run["ingest_date"])
             return result["jobid"]
 
-        @task(execution_timeout=timeout + timedelta(minutes=5))
+        # The last task publishes the table Asset that transformation DAGs are scheduled on (ADR-0004).
+        @task(execution_timeout=timeout + timedelta(minutes=5), outlets=[ingestion_asset(jf.name)])
         def wait(flink_job_id: str) -> str:
             """Polls the JobManager until the job ends; cancels it after runtime.timeout (deferrable in Phase 5)."""
             deadline = time.monotonic() + timeout.total_seconds()

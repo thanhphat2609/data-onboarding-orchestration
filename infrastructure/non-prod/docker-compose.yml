@@ -3,7 +3,8 @@
 # Secrets come from infrastructure/non-prod/.env (created by bootstrap.sh, never committed).
 #
 # Needs a checkout of data-onboarding-ingestion next to this repository (INGESTION_REPO_DIR, ADR-0002): its job,
-# connection and template files, its control plane library and its sources.env are mounted read-only.
+# connection and template files, its control plane library and its sources.env are mounted read-only. The dbt project
+# comes from a checkout of data-onboarding-transformation (TRANSFORMATION_REPO_DIR, ADR-0004), also read-only.
 #
 # Metadata DB (ingestion ADR-0011): the platform's shared PostgreSQL server, hosted by the data-onboarding-agent stack,
 # over the Docker network `data-platform`. Without that stack, COMPOSE_PROFILES=local-db in .env (bootstrap.sh's
@@ -60,6 +61,8 @@ services:
       AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL: "30"
       INGESTION_PROJECT_DIR: /opt/airflow/projects/ingestion
       INGESTION_RUN_DIR: /opt/ingestion/runs
+      TRANSFORMATION_PROJECT_DIR: /opt/airflow/projects/transformation
+      TRANSFORMATION_JOBS_DIR: /opt/airflow/pipelines/transformations
       FLINK_REST_URL: http://flink-jobmanager:8081
       FLINK_SMOKE_JAR: /opt/flink-examples/streaming/WordCount.jar
       # dags/ for `common`; the control plane library for the fetch task of API jobs (ingestion ADR-0015).
@@ -78,6 +81,8 @@ services:
       # The connections and jobs are this repository's files, merged from the Web UI's pull requests (ADR-0003).
       - ../../pipelines/jobs:/opt/airflow/projects/ingestion/jobs:ro
       - ../../pipelines/connections:/opt/airflow/projects/ingestion/connections:ro
+      # One YAML file per transformation DAG (ADR-0004). Not under the dbt project's mount: that one is read-only.
+      - ../../pipelines/transformations:/opt/airflow/pipelines/transformations:ro
       # From the data-onboarding-ingestion checkout (ADR-0002).
       - ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/code/templates:/opt/airflow/projects/ingestion/templates:ro
       - ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/code/control-plane/src:/opt/ingestion/control-plane:ro
@@ -85,6 +90,9 @@ services:
       - ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/infrastructure/non-prod/data/runs:/opt/ingestion/runs
       # Flink example JARs for the Phase 1 smoke job (filled by the JobManager image).
       - flink-examples:/opt/flink-examples:ro
+      # dbt project of data-onboarding-transformation (ADR-0004) and the DuckDB file dbt writes.
+      - ${TRANSFORMATION_REPO_DIR:-../../../data-onboarding-transformation}:/opt/airflow/projects/transformation:ro
+      - dbt-duckdb:/opt/dbt/data
     networks: [platform, sources]
     depends_on:
       # Only with the local-db profile; the shared server is another Compose project, so start.sh waits for it.
@@ -113,6 +121,7 @@ networks:
 volumes:
   postgres-data:   # local-db profile only
   airflow-logs:
+  dbt-duckdb:
   # Created by the data-onboarding-ingestion stack, so it has to start first.
   flink-examples:
     name: ingestion-flink-examples
