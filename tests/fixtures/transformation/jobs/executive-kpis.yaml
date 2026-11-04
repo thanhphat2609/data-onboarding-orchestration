@@ -1,0 +1,6 @@
+kind: TransformationJob
+name: executive-kpis
+owner: data-team
+after:
+  - transformation: sales-mart
+select: tag:kpi

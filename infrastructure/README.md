@@ -1,7 +1,7 @@
 # Infrastructure
 
 ```
-docker/airflow/   apache/airflow plus confluent-kafka for API jobs; no Flink, no dbt
+docker/airflow/   apache/airflow plus confluent-kafka for API jobs and dbt-duckdb in /opt/dbt-venv (ADR-0004); no Flink
 non-prod/         One Compose project with Airflow (and PostgreSQL with the local-db profile)
 prod/             Airflow on VM 1, deployed by GitHub Actions (draft until the VMs exist)
 ```

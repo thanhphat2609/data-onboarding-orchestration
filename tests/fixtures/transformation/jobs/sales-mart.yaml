@@ -1,0 +1,15 @@
+kind: TransformationJob
+name: sales-mart
+owner: data-team
+after:
+  - ingestion: sales-orders-daily
+  - ingestion: crm-customers-daily
+select: tag:sales
+exclude: tag:slow
+vars:
+  run_mode: nightly
+runtime:
+  timeout: 2h
+  threads: 2
+tags:
+  - sales

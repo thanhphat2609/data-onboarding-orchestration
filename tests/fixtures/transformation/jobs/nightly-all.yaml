@@ -1,0 +1,6 @@
+kind: TransformationJob
+name: nightly-all
+owner: data-team
+schedule: 0 4 * * *
+select: "*"
+full_refresh: true
