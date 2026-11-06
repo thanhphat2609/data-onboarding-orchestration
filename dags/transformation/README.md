@@ -2,9 +2,11 @@
 
 Mounted on Airflow at `/opt/airflow/dags/transformation/`. Decision: [ADR-0004](../../docs/adr/0004-transformation-dags.md); plan: [0001](../../docs/plans/0001-transformation-dags.md).
 
-## `transformation_dag_factory.py`
+## How it is built
 
-Turns every `pipelines/transformations/<name>.yaml` into the DAG `transform__<name>` (`validate → dbt_build`). The dbt project comes from a read-only checkout of data-onboarding-transformation; `dbt_build` runs `/opt/dbt-venv/bin/dbt build` on a scratch copy of it.
+`transformation_dag_factory.py` builds the DAGs and the dbt command; `../common/transformation_files.py` reads and validates the files (schema, references, cycles) and `../common/duration.py` parses `runtime.timeout`.
+
+It turns every `pipelines/transformations/<name>.yaml` into the DAG `transform__<name>` (`validate → dbt_build`). The dbt project comes from a read-only checkout of data-onboarding-transformation; `dbt_build` runs `/opt/dbt-venv/bin/dbt build` on a scratch copy of it.
 
 ```yaml
 kind: TransformationJob

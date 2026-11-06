@@ -10,7 +10,8 @@ Airflow for the data onboarding platform: one DAG per ingestion job, and one DAG
 dags/
   ingestion/         DAG factory: every pipelines/jobs/<name>.yaml of this repo -> DAG ingest__<name>
   transformation/    one DAG per pipelines/transformations/*.yaml; scheduled on the table Assets ingestion publishes
-  common/            settings shared by the factories
+  common/            what the factories share: reading the job and transformation files, the Flink REST client
+                     (runner start and wait), assets, durations, platform settings; plain Python where possible
 scripts/             pools conn__<name> from the connection files
 tests/               offline tests; fixtures/ingestion/ stands in for the ingestion repo
 infrastructure/      Airflow image, non-prod and prod Compose files, deploy (infrastructure/README.md)
@@ -54,7 +55,10 @@ CI also builds the image and parses the fixture jobs with real Airflow.
 |---|---|
 | [ADR-0001](docs/adr/0001-orchestration-repo.md) | Why Airflow has its own repository |
 | [ADR-0002](docs/adr/0002-repo-contracts.md) | What Airflow reads from the other repositories |
+| [ADR-0003](docs/adr/0003-pipelines-live-here.md) | The job, connection and transformation files live in this repository |
 | [ADR-0004](docs/adr/0004-transformation-dags.md) | Transformation DAGs from YAML, dbt-duckdb in the image, Assets between DAGs ([plan](docs/plans/0001-transformation-dags.md)) |
-| [dags/ingestion/README.md](dags/ingestion/README.md) | The ingestion DAG factory |
+| [ADR-0005](docs/adr/0005-prototype-prod-and-the-runner.md) | The prototype prod: own PostgreSQL, `submit` starts the runner, smaller DAG factories |
+| [dags/ingestion/README.md](dags/ingestion/README.md) | The ingestion DAG factory: tasks, runner start, settings |
+| [dags/transformation/README.md](dags/transformation/README.md) | The transformation DAG factory |
 | [infrastructure/README.md](infrastructure/README.md) | Running it, non-prod and prod |
 | [docs/postgresql.md](docs/postgresql.md) | The `airflow` and `platform` databases |
