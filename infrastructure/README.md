@@ -65,6 +65,7 @@ After a pull request from the Web UI is merged, run `git pull` in the Codespace:
 | `AIRFLOW_FERNET_KEY` | `python -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. Keep it: Airflow can't decrypt stored connections without it |
 | `AIRFLOW_JWT_SECRET` | `openssl rand -hex 32` |
 | `AIRFLOW_ADMIN_PASSWORD` | Airflow UI login `admin` |
+| `ADLS_ACCOUNT_KEY` | Optional. Access key of the ADLS Gen2 account the jobs write to (the same value as in data-onboarding-ingestion): the task `wait` counts a run's rows with it. Without it a run is reported as `row count unavailable` |
 
 ### Variables
 

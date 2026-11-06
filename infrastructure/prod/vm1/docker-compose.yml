@@ -121,6 +121,11 @@ services:
   airflow-scheduler:
     <<: *airflow
     command: airflow scheduler
+    environment:
+      <<: *airflow-env
+      # Tasks run here (LocalExecutor). The task `wait` counts the rows of a run in the lake with it; optional, without
+      # it the run is reported without a row count.
+      ADLS_ACCOUNT_KEY: ${ADLS_ACCOUNT_KEY:-}
     env_file:
       - path: ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/infrastructure/prod/vm1/sources.env
         required: false
