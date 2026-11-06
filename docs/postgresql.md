@@ -17,7 +17,8 @@ Where the server runs depends on the mode ([infrastructure/README.md](../infrast
 
 | Mode | Connect with |
 |---|---|
-| Shared server (VM 1, or both stacks on one host) | `docker exec -it data-onboarding-postgres psql -U airflow -d airflow` |
+| Shared server (both stacks on one host, with the agent stack) | `docker exec -it data-onboarding-postgres psql -U airflow -d airflow` |
+| Prod prototype (VM 1, no agent stack: this stack's own `postgres`, [ADR-0005](adr/0005-prototype-prod-and-the-runner.md)) | `docker exec -it orchestration-prod-postgres-1 psql -U airflow -d airflow` |
 | Without the agent stack (`COMPOSE_PROFILES=local-db`) | `docker compose -f infrastructure/non-prod/docker-compose.yml exec postgres psql -U airflow -d airflow` |
 
 For the platform database, use `-U platform -d platform` instead. Each role reaches only its own database.
@@ -47,7 +48,7 @@ Table names are Airflow 3's; `\dt` lists them all.
 
 | Table | Holds |
 |---|---|
-| `dag` | One row per DAG (one per job file, [ADR-0008](adr/0008-airflow-dag-per-job.md)) |
+| `dag` | One row per DAG (one per job file, [ingestion ADR-0008](https://github.com/thanhphat2609/data-onboarding-ingestion/blob/main/docs/adr/0008-airflow-dag-per-job.md)) |
 | `dag_run` | One row per run of a DAG |
 | `task_instance` | One row per task of a run, with its state and try number |
 | `import_error` | DAG files Airflow couldn't parse |
@@ -85,4 +86,4 @@ SELECT pool, slots, description FROM slot_pool ORDER BY pool;
 
 ## The `platform` database
 
-Planned for Phase 5 ([architecture §3.4](architecture.md#34-metadata-db)): `runs` (one row per run: `ingest_date`, Flink job id, expected and written rows, output paths, resolved spec, error) and `run_events` (state changes, append-only). The queries for them will be added here with the tables.
+Planned for Phase 5 ([ingestion architecture §3.4](https://github.com/thanhphat2609/data-onboarding-ingestion/blob/main/docs/architecture.md#34-metadata-db)): `runs` (one row per run: `ingest_date`, Flink job id, expected and written rows, output paths, resolved spec, error) and `run_events` (state changes, append-only). The queries for them will be added here with the tables.

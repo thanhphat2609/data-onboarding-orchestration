@@ -3,7 +3,7 @@
 ```
 docker/airflow/   apache/airflow plus confluent-kafka for API jobs and dbt-duckdb in /opt/dbt-venv (ADR-0004); no Flink
 non-prod/         One Compose project with Airflow (and PostgreSQL with the local-db profile)
-prod/             Airflow on VM 1, deployed by GitHub Actions (draft until the VMs exist)
+prod/             Airflow and its PostgreSQL on VM 1, deployed by GitHub Actions (prototype, [ADR-0005](../docs/adr/0005-prototype-prod-and-the-runner.md))
 ```
 
 ## Non-prod
@@ -39,11 +39,13 @@ The metadata used to be in the ingestion stack's `postgres-data` volume, and tha
 
 ## Prod
 
-Airflow runs on VM 1 next to the other two stacks. **Draft until the VMs exist.** Deploy order on a new VM: data-onboarding-agent, data-onboarding-ingestion, this repository.
+Airflow runs on VM 1 next to the ingestion stack. **Prototype:** it has run end to end (a job saved in the Web UI, merged here, run by Airflow, Parquet on ADLS Gen2). The VMs are stopped between sessions, so `PROD_DEPLOY_ENABLED` is `false`; set it to `true` after starting them. Deploy order on a new VM: data-onboarding-ingestion, then this repository (the agent stack is not deployed: this stack runs its own PostgreSQL).
 
-**Once, on VM 1:** clone this repository next to data-onboarding-ingestion (default `/opt/data-onboarding-orchestration`), with a read-only deploy key.
+**Once, on VM 1:** clone this repository, data-onboarding-ingestion and data-onboarding-transformation side by side (default `/opt/<repository name>`), with a read-only deploy key or a token. Docker Engine and the Compose plugin must be installed.
 
-**Deploy:** Actions → Deploy → Run workflow. It needs a green CI run for the commit, writes `vm1/.env` from the secrets and variables below, then checks out the commit, builds and starts.
+**Deploy:** Actions → Deploy → Run workflow. It needs a green CI run for the commit (right after a merge, wait for CI on `main` to finish), writes `vm1/.env` from the secrets and variables below, then checks out the commit, builds and starts. `deploy.sh` creates the Docker network `data-platform` if it is missing.
+
+**What a run needs from the ingestion stack:** the volumes `ingestion-runs` and `ingestion-flink-examples` (the latter holds `flink-python.jar`, which `submit` uploads), a healthy JobManager that mounts the runner and this repository's `pipelines/`, and, for the sources, the firewall ports of [ingestion's prod README](https://github.com/thanhphat2609/data-onboarding-ingestion/blob/main/infrastructure/prod/README.md#vm-setup-once-per-vm).
 
 **Job and connection files** (`pipelines/`, merged from the Web UI's pull requests, [ADR-0003](../docs/adr/0003-pipelines-live-here.md)) need no click: when CI is green on a push to `main` that changed only `pipelines/`, the Deploy workflow checks the commit out on VM 1 without a rebuild, and Airflow picks the files and pools up by itself. A push that changed anything else waits for a manual Deploy.
 
@@ -58,7 +60,8 @@ After a pull request from the Web UI is merged, run `git pull` in the Codespace:
 | Name | What it is |
 |---|---|
 | `PROD_SSH_PRIVATE_KEY`, `PROD_SSH_KNOWN_HOSTS`, `PROD_SSH_USER`, `PROD_VM1_HOST` | Same values as in data-onboarding-ingestion |
-| `AIRFLOW_DB_PASSWORD` | Role `airflow`; same value as the agent's `POSTGRES_AIRFLOW_PASSWORD` |
+| `AIRFLOW_DB_PASSWORD` | Role `airflow` of this stack's `postgres` (with the agent stack's server: its `POSTGRES_AIRFLOW_PASSWORD`) |
+| `POSTGRES_PASSWORD`, `PLATFORM_DB_PASSWORD` | The `postgres` superuser and the role `platform` of this stack's PostgreSQL ([ADR-0005](../docs/adr/0005-prototype-prod-and-the-runner.md)) |
 | `AIRFLOW_FERNET_KEY` | `python -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. Keep it: Airflow can't decrypt stored connections without it |
 | `AIRFLOW_JWT_SECRET` | `openssl rand -hex 32` |
 | `AIRFLOW_ADMIN_PASSWORD` | Airflow UI login `admin` |
@@ -67,9 +70,9 @@ After a pull request from the Web UI is merged, run `git pull` in the Codespace:
 
 | Name | Example | What it is |
 |---|---|---|
-| `PROD_DEPLOY_ENABLED` | `true` | Anything else (or unset) turns the Deploy workflow off |
+| `PROD_DEPLOY_ENABLED` | `true` | Anything else (or unset) turns the Deploy workflow off; `false` while the VMs are stopped |
 | `PROD_REPO_DIR` | `/opt/data-onboarding-orchestration` | Where this repository is cloned on VM 1 |
 | `PROD_SSH_PORT` | `22` | SSH port (default `22`) |
-| `INGESTION_REPO_DIR`, `METADATA_DB_HOST` | | Optional; empty = the default in the Compose file |
+| `INGESTION_REPO_DIR`, `TRANSFORMATION_REPO_DIR`, `METADATA_DB_HOST` | | Optional; empty = the default in the Compose file (`METADATA_DB_HOST` only with a PostgreSQL other than this stack's) |
 
 A setting you can't fill in yet can be `TODO`: the deploy stops while any secret or variable still has that value.

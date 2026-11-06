@@ -65,7 +65,7 @@ file is skipped with a one-line reason; the other DAGs keep loading.
 
 ## Risks and how the plan handles them
 
-- The ingestion DAG's Phase 1 smoke job loads no data, but publishes the Asset; transformation DAGs are paused at creation
+- The ingestion DAG published the Asset even when it ran only the Phase 1 smoke job (now it starts the runner, [ADR-0005](../adr/0005-prototype-prod-and-the-runner.md)); it still publishes after `wait`; transformation DAGs are paused at creation
   (`DAGS_ARE_PAUSED_AT_CREATION`), so nothing runs until someone unpauses one.
 - Asset events do not carry a partition: a backfill of old `ingest_date` partitions re-triggers the transformation once per
   finished run. Acceptable while `dbt build` is idempotent; revisit with partitioned assets.
