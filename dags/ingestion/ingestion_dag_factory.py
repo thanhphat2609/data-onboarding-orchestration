@@ -5,9 +5,10 @@ The job files belong to data-onboarding-ingestion; this repository only reads th
 ``ingest__<name>``. Each file is validated on its own: an invalid file is skipped and logged, and
 every other DAG keeps loading.
 
-Phase 1 tasks: ``validate -> submit -> wait``. ``submit`` runs a smoke Flink job on the session
-cluster to prove the wiring; the PyFlink runner replaces it in Phase 4 (ingestion ADR-0010), and preflight, verify and
-publish (with the table Asset) arrive in Phase 5.
+Tasks: ``validate -> submit -> wait``. ``submit`` starts the PyFlink runner of data-onboarding-ingestion (ADR-0010) on
+the session cluster through the JobManager's REST API: it copies the job's query to Parquet in ``_staging/<run_id>/``
+of the sink's storage. ``INGESTION_SUBMIT_MODE=smoke`` runs Flink's WordCount example instead, to test the wiring only.
+Preflight, verify and publish (with the table Asset) arrive in Phase 5.
 
 API jobs (source templates with ``fetch: rest_api``, ingestion ADR-0015) get a ``fetch`` task before ``submit``: it
 pages through the API and lands the records on Redpanda, and ``submit`` gets the run's topic offsets. ``fetch`` uses the
@@ -46,6 +47,13 @@ FLINK_REST_URL = os.environ.get("FLINK_REST_URL", "http://flink-jobmanager:8081"
 LANDING_BOOTSTRAP_SERVERS = os.environ.get("LANDING_BOOTSTRAP_SERVERS", "redpanda:9092")
 # Example JAR shipped with the Flink image; shared with Airflow through a volume in non-prod.
 SMOKE_JAR = Path(os.environ.get("FLINK_SMOKE_JAR", "/opt/flink-examples/streaming/WordCount.jar"))
+# The runner: flink-python's PythonDriver runs main.py on the JobManager (ingestion ADR-0010). The jar is copied to the
+# shared examples volume by the ingestion stack; the runner and the merged pipelines/ are mounted on the JobManager.
+SUBMIT_MODE = os.environ.get("INGESTION_SUBMIT_MODE", "runner")
+PYTHON_JAR = Path(os.environ.get("FLINK_PYTHON_JAR", "/opt/flink-examples/flink-python.jar"))
+PYTHON_DRIVER = "org.apache.flink.client.python.PythonDriver"
+RUNNER_MAIN = os.environ.get("FLINK_RUNNER_MAIN", "/opt/runner/main.py")
+FLINK_PIPELINES_DIR = os.environ.get("FLINK_PIPELINES_DIR", "/opt/ingestion/pipelines")
 
 DAG_PREFIX = "ingest__"
 DEFAULT_TIMEOUT = "2h"
@@ -196,6 +204,21 @@ def _flink(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
     return response.json() if response.content else {}
 
 
+def runner_arguments(job_file: str, run_id: str, ingest_date: str) -> list[str]:
+    """Command line of the runner as PythonDriver takes it; ``--no-wait`` because the task ``wait`` polls the job."""
+    return [
+        "-py",
+        RUNNER_MAIN,
+        "--job",
+        f"{FLINK_PIPELINES_DIR}/jobs/{job_file}",
+        "--run-id",
+        re.sub(r"[^A-Za-z0-9_.-]", "_", run_id),
+        "--ingest-date",
+        ingest_date,
+        "--no-wait",
+    ]
+
+
 def upload_jar(jar: Path) -> str:
     """Uploads the JAR once and reuses it by file name, so repeated runs do not pile up copies."""
     for uploaded in _flink("GET", "/jars").get("files", []):
@@ -294,16 +317,22 @@ def build_dag(jf: JobFile) -> DAG:
 
         @task
         def submit(run: dict[str, Any]) -> str:
-            """Starts the Flink job of this run and returns its id (the WordCount smoke job for now)."""
+            """Starts the Flink job of this run (the runner) and returns its id."""
             if "landing" in run:
-                # The runner (Phase 4) reads exactly this range as the table `landing` (landing_table_sql).
+                # The runner reads exactly this range as the table `landing` (landing_table_sql).
                 log.info("Landed: %s", run["landing"])
-            # Phase 1 smoke job. Phase 4 runs the PyFlink runner instead: the flink-python JAR with
-            # entryClass PythonDriver and programArgsList ["-py", <runner>/main.py, "--job", <path>].
-            jar_id = upload_jar(SMOKE_JAR)
-            result = _flink(
-                "POST", f"/jars/{jar_id}/run", json={"parallelism": run["parallelism"], "programArgsList": []}
-            )
+            if SUBMIT_MODE == "smoke":
+                jar_id = upload_jar(SMOKE_JAR)
+                body: dict[str, Any] = {"parallelism": run["parallelism"], "programArgsList": []}
+            else:
+                run_id = get_current_context()["dag_run"].run_id
+                jar_id = upload_jar(PYTHON_JAR)
+                body = {
+                    "entryClass": PYTHON_DRIVER,
+                    "programArgsList": runner_arguments(jf.path.name, run_id, run["ingest_date"]),
+                    "parallelism": run["parallelism"],
+                }
+            result = _flink("POST", f"/jars/{jar_id}/run", json=body)
             log.info("Submitted Flink job %s (ingest_date %s)", result["jobid"], run["ingest_date"])
             return result["jobid"]
 
