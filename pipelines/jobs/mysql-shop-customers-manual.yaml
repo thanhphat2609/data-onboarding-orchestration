@@ -1,0 +1,14 @@
+kind: IngestionJob
+name: mysql-shop-customers-manual
+owner: data-team
+connection: shop-mysql-connection
+source:
+  query: |
+    SELECT customer_id, full_name, email, updated_at
+    FROM customers
+sink:
+  template: adls_parquet@1
+  params:
+    target_file_size_mb: 128
+    storage_account: dataonboardingplatform
+    path: mysql/shop/customers
