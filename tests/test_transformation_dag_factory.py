@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +73,7 @@ def _write(directory: Path, name: str, body: str) -> None:
 def test_invalid_files_are_skipped_and_the_others_load(
     transformation_factory: Any, tmp_path: Path, monkeypatch: Any
 ) -> None:
+    files = importlib.import_module("common.transformation_files")
     jobs = tmp_path / "jobs"
     jobs.mkdir()
     _write(jobs, "good", "")
@@ -85,9 +87,9 @@ def test_invalid_files_are_skipped_and_the_others_load(
         (TRANSFORMATION_FIXTURES / "jobs" / "sales-mart.yaml").read_text("utf-8"), "utf-8"
     )
     (jobs / "no-select.yaml").write_text("kind: TransformationJob\nname: no-select\nowner: o\n", "utf-8")
-    monkeypatch.setattr(transformation_factory, "JOBS_DIR", jobs)
+    monkeypatch.setattr(files, "JOBS_DIR", jobs)
 
-    valid, invalid = transformation_factory.load_files()
+    valid, invalid = files.load_files()
 
     assert [tf.name for tf in valid] == ["good"]
     assert set(invalid) == {
