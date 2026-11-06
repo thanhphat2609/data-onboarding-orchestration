@@ -200,7 +200,9 @@ def resolve_ingest_date(override: str | None, run_moment: pendulum.DateTime) -> 
 def _flink(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
     """One call to the Flink JobManager's REST API; the JSON answer, or an empty dict."""
     response = requests.request(method, f"{FLINK_REST_URL}{path}", timeout=30, **kwargs)
-    response.raise_for_status()
+    if not response.ok:
+        # Flink's answer says why (for example the Python error of a runner that failed to start); keep it.
+        raise RuntimeError(f"Flink {method} {path}: {response.status_code} {response.text[:1500]}")
     return response.json() if response.content else {}
 
 
