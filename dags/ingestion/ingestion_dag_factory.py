@@ -7,7 +7,8 @@ every other DAG keeps loading.
 
 Tasks: ``validate -> submit -> wait``. ``submit`` starts the PyFlink runner of data-onboarding-ingestion (ADR-0010) on
 the session cluster through the JobManager's REST API: it copies the job's query to Parquet at the sink's table path
-(``INGESTION_RUNNER_TARGET=staging`` writes ``_staging/<run_id>/`` instead). ``INGESTION_SUBMIT_MODE=smoke`` runs Flink's WordCount example instead, to test the wiring only.
+(``INGESTION_RUNNER_TARGET=staging`` writes ``_staging/<run_id>/`` instead). ``INGESTION_SUBMIT_MODE=smoke`` runs
+Flink's WordCount example, to test the wiring only.
 Preflight, verify and publish (with the table Asset) arrive in Phase 5.
 
 API jobs (source templates with ``fetch: rest_api``, ingestion ADR-0015) get a ``fetch`` task before ``submit``: it
