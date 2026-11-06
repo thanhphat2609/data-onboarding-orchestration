@@ -6,8 +6,9 @@ The job files belong to data-onboarding-ingestion; this repository only reads th
 every other DAG keeps loading.
 
 Tasks: ``validate -> submit -> wait``. ``submit`` starts the PyFlink runner of data-onboarding-ingestion (ADR-0010) on
-the session cluster through the JobManager's REST API: it copies the job's query to Parquet in ``_staging/<run_id>/``
-of the sink's storage. ``INGESTION_SUBMIT_MODE=smoke`` runs Flink's WordCount example instead, to test the wiring only.
+the session cluster through the JobManager's REST API: it copies the job's query to Parquet at the sink's table path
+(``INGESTION_RUNNER_TARGET=staging`` writes ``_staging/<run_id>/`` instead). ``INGESTION_SUBMIT_MODE=smoke`` runs
+Flink's WordCount example, to test the wiring only.
 Preflight, verify and publish (with the table Asset) arrive in Phase 5.
 
 API jobs (source templates with ``fetch: rest_api``, ingestion ADR-0015) get a ``fetch`` task before ``submit``: it
@@ -54,6 +55,9 @@ PYTHON_JAR = Path(os.environ.get("FLINK_PYTHON_JAR", "/opt/flink-examples/flink-
 PYTHON_DRIVER = "org.apache.flink.client.python.PythonDriver"
 RUNNER_MAIN = os.environ.get("FLINK_RUNNER_MAIN", "/opt/runner/main.py")
 FLINK_PIPELINES_DIR = os.environ.get("FLINK_PIPELINES_DIR", "/opt/ingestion/pipelines")
+# "final": the runner writes the table path and replaces the ingest_date partition (no publish step exists yet).
+# "staging": _staging/<run_id>/, for when the Phase 5 publisher moves it (ingestion ADR-0004).
+RUNNER_TARGET = os.environ.get("INGESTION_RUNNER_TARGET", "final")
 
 DAG_PREFIX = "ingest__"
 DEFAULT_TIMEOUT = "2h"
@@ -217,6 +221,8 @@ def runner_arguments(job_file: str, run_id: str, ingest_date: str) -> list[str]:
         re.sub(r"[^A-Za-z0-9_.-]", "_", run_id),
         "--ingest-date",
         ingest_date,
+        "--target",
+        RUNNER_TARGET,
         "--no-wait",
     ]
 

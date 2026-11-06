@@ -57,4 +57,5 @@ def test_the_runner_gets_the_job_file_the_run_and_the_date(factory: Any) -> None
     assert arguments[arguments.index("--job") + 1] == f"{factory.FLINK_PIPELINES_DIR}/jobs/shop-orders-daily.yaml"
     assert arguments[arguments.index("--run-id") + 1] == "manual__2026-11-06T08_00_00_00_00"
     assert arguments[arguments.index("--ingest-date") + 1] == "2026-11-06"
+    assert arguments[arguments.index("--target") + 1] == factory.RUNNER_TARGET == "final"
     assert "--no-wait" in arguments
