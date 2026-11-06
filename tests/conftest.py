@@ -72,6 +72,18 @@ def factory() -> Any:
 
 
 @pytest.fixture(scope="session")
+def jobs_module(factory: Any) -> Any:
+    """``common.ingestion_jobs``, imported after ``factory`` has set the environment it reads."""
+    return importlib.import_module("common.ingestion_jobs")
+
+
+@pytest.fixture(scope="session")
+def flink_module(factory: Any) -> Any:
+    """``common.flink_rest``, the Flink REST client and runner submission."""
+    return importlib.import_module("common.flink_rest")
+
+
+@pytest.fixture(scope="session")
 def transformation_factory(factory: Any) -> Any:
     """The transformation DAG factory, loaded after ``factory`` has installed the airflow.sdk stub."""
     return importlib.import_module("transformation_dag_factory")
