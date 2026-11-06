@@ -48,3 +48,13 @@ def test_an_invalid_file_is_skipped_and_the_others_load(factory: Any, tmp_path: 
     assert len(valid) == 4
     assert set(invalid) == {"broken.yaml", "wrong-name.yaml"}
     assert "does not match" in invalid["wrong-name.yaml"]
+
+
+def test_the_runner_gets_the_job_file_the_run_and_the_date(factory: Any) -> None:
+    arguments = factory.runner_arguments("shop-orders-daily.yaml", "manual__2026-11-06T08:00:00+00:00", "2026-11-06")
+
+    assert arguments[:2] == ["-py", factory.RUNNER_MAIN]
+    assert arguments[arguments.index("--job") + 1] == f"{factory.FLINK_PIPELINES_DIR}/jobs/shop-orders-daily.yaml"
+    assert arguments[arguments.index("--run-id") + 1] == "manual__2026-11-06T08_00_00_00_00"
+    assert arguments[arguments.index("--ingest-date") + 1] == "2026-11-06"
+    assert "--no-wait" in arguments
