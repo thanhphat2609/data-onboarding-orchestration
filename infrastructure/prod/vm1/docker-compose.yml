@@ -56,9 +56,32 @@ x-airflow: &airflow
   restart: unless-stopped
 
 services:
+  # Prototype: this stack runs its own PostgreSQL (the data-onboarding-agent stack's shared server doesn't exist yet).
+  # Same databases and roles as the shared server; reachable as `postgres` on data-platform. Replace by the shared
+  # server (set METADATA_DB_HOST, drop this service) when it exists.
+  postgres:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD:?}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../../non-prod/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    networks: [default, platform]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   # Runs once per deploy: migrates the metadata DB and creates the pools from the connection files.
   airflow-init:
     <<: *airflow
+    depends_on:
+      postgres:
+        condition: service_healthy
     command:
       - bash
       - -c
@@ -121,12 +144,13 @@ services:
 
 networks:
   default: {}
-  # Created by the data-onboarding-agent stack, which runs the shared PostgreSQL server (ingestion ADR-0011).
+  # Shared by the stacks of VM 1. Created by deploy.sh if missing (the agent stack that used to create it isn't deployed).
   platform:
     name: data-platform
     external: true
 
 volumes:
+  postgres-data:
   airflow-logs:
   dbt-duckdb:
   # Created by the data-onboarding-ingestion stack, so it deploys first.

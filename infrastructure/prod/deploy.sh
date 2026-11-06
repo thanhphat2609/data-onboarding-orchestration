@@ -33,6 +33,7 @@ if [[ "$pipelines_only" == true ]]; then
   exit 0
 fi
 
+docker network inspect data-platform >/dev/null 2>&1 || docker network create data-platform
 "${compose[@]}" build --pull "${no_cache[@]}"
 "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 600
 
