@@ -27,8 +27,12 @@ run. That is the largest risk of the plan, so step 1 checks it before anything e
 
 Where a step belongs to another repository, the repository is named.
 
-1. [ ] Check SQL Server support in data-onboarding-ingestion (runner source types, Flink image drivers). Decide: use
+1. [x] Check SQL Server support in data-onboarding-ingestion (runner source types, Flink image drivers). Decide: use
    it as is, or add it there first (own plan in that repository).
+   Result (2026-11-10): use it as is. The runner has the `sqlserver` dialect (identifier quoting, type mapping), the
+   source template `sqlserver.yaml` exists, and the Flink image ships `mssql-jdbc` 13.6.1. The non-prod example source
+   has a SQL Server with a `crm` database. Not proven on a cluster yet (the runner README says so), so step 4 is the
+   first real test; if it fails on the driver or a type, switch to the fallback below.
 2. [ ] Docs, one place per change: this plan; an ADR here only if a real decision comes out of step 1; a short note
    in data-onboarding-ingestion if the runner changes; a README for the demo model in data-onboarding-transformation.
 3. [ ] Connection file `pipelines/connections/<name>-connection.yaml` and job file `pipelines/jobs/<name>.yaml` for
