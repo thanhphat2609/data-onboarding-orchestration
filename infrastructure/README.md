@@ -65,7 +65,7 @@ After a pull request from the Web UI is merged, run `git pull` in the Codespace:
 | `AIRFLOW_FERNET_KEY` | `python -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. Keep it: Airflow can't decrypt stored connections without it |
 | `AIRFLOW_JWT_SECRET` | `openssl rand -hex 32` |
 | `AIRFLOW_ADMIN_PASSWORD` | Airflow UI login `admin` |
-| `ADLS_ACCOUNT_KEY` | Optional. Access key of the ADLS Gen2 account the jobs write to (the same value as in data-onboarding-ingestion): the task `wait` counts a run's rows with it. Without it a run is reported as `row count unavailable` |
+| `ADLS_ACCOUNT_KEY` | Access key of the lake's storage account. Same name and value as in data-onboarding-ingestion (one name for the lake key everywhere). Read by the dbt profile of the transformation DAGs, and by the task `wait` on the scheduler to count a run's rows from the Parquet footers (without it a run is reported as `row count unavailable`). Set once with `gh secret set ADLS_ACCOUNT_KEY`; to rotate, set it again and redeploy. Nothing is set by hand on the VM |
 
 ### Variables
 
@@ -75,5 +75,6 @@ After a pull request from the Web UI is merged, run `git pull` in the Codespace:
 | `PROD_REPO_DIR` | `/opt/data-onboarding-orchestration` | Where this repository is cloned on VM 1 |
 | `PROD_SSH_PORT` | `22` | SSH port (default `22`) |
 | `INGESTION_REPO_DIR`, `TRANSFORMATION_REPO_DIR`, `METADATA_DB_HOST` | | Optional; empty = the default in the Compose file (`METADATA_DB_HOST` only with a PostgreSQL other than this stack's) |
+| `ADLS_STORAGE_ACCOUNT`, `LAKE_RAW_ROOT`, `LAKE_CURATED_ROOT` | | Optional; defaults `dataonboardingplatform`, `azure://raw/parquet`, `azure://transformation/dbt`. Use `azure://` paths: the account key does not work with `abfss://` |
 
 A setting you can't fill in yet can be `TODO`: the deploy stops while any secret or variable still has that value.

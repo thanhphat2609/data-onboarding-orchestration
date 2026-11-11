@@ -69,8 +69,8 @@ file is skipped with a one-line reason; the other DAGs keep loading.
   (`DAGS_ARE_PAUSED_AT_CREATION`), so nothing runs until someone unpauses one.
 - Asset events do not carry a partition: a backfill of old `ingest_date` partitions re-triggers the transformation once per
   finished run. Acceptable while `dbt build` is idempotent; revisit with partitioned assets.
-- The dbt profile's ADLS credentials are not set yet (see the Dockerfile profile); `dbt build` fails on `abfss://` sources
-  until they are.
+- The dbt profile reads the lake with the account key (`ADLS_ACCOUNT_KEY`, `ADLS_STORAGE_ACCOUNT`, `azure://` paths; see
+  `infrastructure/docker/airflow/dbt/profiles.yml`). The key does not work with `abfss://`.
 - Multiple Celery workers would need the dbt venv and the DuckDB volume on each one (LocalExecutor today).
 
 ## Steps, in order
@@ -83,4 +83,5 @@ file is skipped with a one-line reason; the other DAGs keep loading.
 6. [x] Compose: mount `pipelines/transformations` and set `TRANSFORMATION_JOBS_DIR`; `.airflowignore` no longer hides `transformation/`.
 7. [x] CI: the real-Airflow parse also loads the transformation fixtures.
 8. [x] Docs: `dags/transformation/README.md`, README and infrastructure README.
-9. [ ] Later, not in this plan: ADLS credentials in the dbt profile; partitioned assets; Cosmos behind the same YAML if per-model retry matters.
+9. [x] ADLS credentials in the dbt profile: the account key from the GitHub secret `ADLS_ACCOUNT_KEY`.
+10. [ ] Later, not in this plan: partitioned assets; Cosmos behind the same YAML if per-model retry matters.
