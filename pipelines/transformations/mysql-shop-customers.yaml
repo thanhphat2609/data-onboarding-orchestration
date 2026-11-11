@@ -1,0 +1,8 @@
+kind: TransformationJob
+name: mysql-shop-customers
+owner: data-team
+after:
+  - ingestion: mysql-shop-customers-manual
+select: +shop_customers_by_email_domain
+runtime: {timeout: 1h, threads: 4}
+tags: [shop]
