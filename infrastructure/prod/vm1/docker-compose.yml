@@ -30,8 +30,9 @@ x-airflow: &airflow
     INGESTION_RUN_DIR: /opt/ingestion/runs
     TRANSFORMATION_PROJECT_DIR: /opt/airflow/projects/transformation
     TRANSFORMATION_JOBS_DIR: /opt/airflow/pipelines/transformations
-    # Read by the dbt profile (infrastructure/docker/airflow/dbt/profiles.yml); the key is a GitHub secret.
     ADLS_STORAGE_ACCOUNT: ${ADLS_STORAGE_ACCOUNT:-dataonboardingplatform}
+    # GitHub secret. Read by the dbt profile (infrastructure/docker/airflow/dbt/profiles.yml) and, on the scheduler,
+    # by the task `wait` to count a run's rows in the lake.
     ADLS_ACCOUNT_KEY: ${ADLS_ACCOUNT_KEY:?}
     LAKE_RAW_ROOT: ${LAKE_RAW_ROOT:-azure://raw/parquet}
     LAKE_CURATED_ROOT: ${LAKE_CURATED_ROOT:-azure://transformation/dbt}
@@ -128,9 +129,6 @@ services:
     command: airflow scheduler
     environment:
       <<: *airflow-env
-      # Tasks run here (LocalExecutor). The task `wait` counts the rows of a run in the lake with it; optional, without
-      # it the run is reported without a row count.
-      ADLS_ACCOUNT_KEY: ${ADLS_ACCOUNT_KEY:-}
     env_file:
       - path: ${INGESTION_REPO_DIR:-../../../../data-onboarding-ingestion}/infrastructure/prod/vm1/sources.env
         required: false

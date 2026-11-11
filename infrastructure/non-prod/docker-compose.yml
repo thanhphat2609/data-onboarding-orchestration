@@ -63,8 +63,9 @@ services:
       INGESTION_RUN_DIR: /opt/ingestion/runs
       TRANSFORMATION_PROJECT_DIR: /opt/airflow/projects/transformation
       TRANSFORMATION_JOBS_DIR: /opt/airflow/pipelines/transformations
-      # Read by the dbt profile; empty key = the transformation DAGs can't reach the lake (set it in .env to try them).
       ADLS_STORAGE_ACCOUNT: ${ADLS_STORAGE_ACCOUNT:-dataonboardingplatform}
+      # Optional: read by the dbt profile (empty = the transformation DAGs can't reach the lake) and by the task
+      # `wait` to count a run's rows (empty = the run is reported without a count).
       ADLS_ACCOUNT_KEY: ${ADLS_ACCOUNT_KEY:-}
       LAKE_RAW_ROOT: ${LAKE_RAW_ROOT:-azure://raw/parquet}
       LAKE_CURATED_ROOT: ${LAKE_CURATED_ROOT:-azure://transformation/dbt}
@@ -73,8 +74,6 @@ services:
       # dags/ for `common`; the control plane library for the fetch task of API jobs (ingestion ADR-0015).
       PYTHONPATH: /opt/airflow/dags:/opt/ingestion/control-plane
       LANDING_BOOTSTRAP_SERVERS: redpanda:9092
-      # Optional: the task `wait` counts a run's rows in the lake with it; without it the run is reported without a count.
-      ADLS_ACCOUNT_KEY: ${ADLS_ACCOUNT_KEY:-}
     # Values of env://<VAR> references: the fetch task of API jobs calls the API with them.
     env_file:
       - path: ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/infrastructure/non-prod/sources.env
