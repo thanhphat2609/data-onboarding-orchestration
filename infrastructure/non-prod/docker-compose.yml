@@ -69,9 +69,13 @@ services:
       ADLS_ACCOUNT_KEY: ${ADLS_ACCOUNT_KEY:-}
       LAKE_RAW_ROOT: ${LAKE_RAW_ROOT:-azure://raw/parquet}
       LAKE_CURATED_ROOT: ${LAKE_CURATED_ROOT:-azure://transformation/dbt}
-      # DuckDB's azure extension bundles its own libcurl, which doesn't find Debian's CA bundle on its own: without
-      # this, dbt fails with "Problem with the SSL CA cert" even though the image's system curl works fine.
-      CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+      # DuckDB's azure extension (Azure SDK for C++ over libcurl/OpenSSL) doesn't find Debian's CA bundle on its own:
+      # without this, dbt fails with "Problem with the SSL CA cert" even though the image's system curl works fine.
+      # CURL_CA_BUNDLE alone (tried first) did not fix it: that variable is read by the `curl` command-line tool, not
+      # by a program linked against libcurl. These two are OpenSSL's own fallback variables, read when libcurl leaves
+      # the CA path to OpenSSL's default lookup, which is the case here.
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+      SSL_CERT_DIR: /etc/ssl/certs
       FLINK_REST_URL: http://flink-jobmanager:8081
       FLINK_SMOKE_JAR: /opt/flink-examples/streaming/WordCount.jar
       # dags/ for `common`; the control plane library for the fetch task of API jobs (ingestion ADR-0015).
