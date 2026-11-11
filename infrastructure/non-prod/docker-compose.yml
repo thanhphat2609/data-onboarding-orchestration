@@ -73,6 +73,8 @@ services:
       # dags/ for `common`; the control plane library for the fetch task of API jobs (ingestion ADR-0015).
       PYTHONPATH: /opt/airflow/dags:/opt/ingestion/control-plane
       LANDING_BOOTSTRAP_SERVERS: redpanda:9092
+      # Optional: the task `wait` counts a run's rows in the lake with it; without it the run is reported without a count.
+      ADLS_ACCOUNT_KEY: ${ADLS_ACCOUNT_KEY:-}
     # Values of env://<VAR> references: the fetch task of API jobs calls the API with them.
     env_file:
       - path: ${INGESTION_REPO_DIR:-../../../data-onboarding-ingestion}/infrastructure/non-prod/sources.env
