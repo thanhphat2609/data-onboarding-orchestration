@@ -43,9 +43,17 @@ Where a step belongs to another repository, the repository is named.
 7. [ ] Check that a finished ingestion run starts the transformation DAG by itself (the Asset `ingest__<job>`).
 8. [ ] Rehearse on prod: start the VMs, set `PROD_DEPLOY_ENABLED` to `true`, check that data-onboarding-transformation
    is cloned next to the other repositories (`TRANSFORMATION_REPO_DIR`) and that dbt-duckdb runs in the prod image.
-   Only ingestion has run end to end on prod so far.
+   Only ingestion has run end to end on prod so far. The VM reads the lake with the GitHub secret `ADLS_ACCOUNT_KEY`
+   (same name as in data-onboarding-ingestion), written to its `.env` by the Deploy workflow; set it before the deploy.
 9. [ ] Record the demo. Flow: architecture diagram, add the files through pull request and CI, Airflow creates the
    DAGs, trigger ingestion, the transformation starts on its own, show the dbt result.
+
+## Prototype on MySQL (2026-11-11)
+
+The transformation flow was first proven on the MySQL `shop.customers` table that is already in the lake, so the SQL Server
+demo only needs new models and a transformation file (the skill `create-orchestration-transformation` does these steps):
+`stg_shop__customers` -> `int_shop__customers_current` -> `shop_customers_by_email_domain`, 12/12 dbt models and tests, the mart
+written to `transformation/dbt/` and matching a recomputation from the raw Parquet.
 
 ## Fallback
 

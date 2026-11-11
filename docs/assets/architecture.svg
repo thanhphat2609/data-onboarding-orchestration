@@ -121,7 +121,7 @@
   <text class="bt" x="1064" y="182">raw / delta</text>
   <text class="bs" x="1064" y="200">Flink output</text>
   <rect class="box" x="1050" y="440" width="150" height="130" rx="8"/>
-  <text class="bt" x="1064" y="462">curated / dbt</text>
+  <text class="bt" x="1064" y="462">transformation/dbt</text>
   <text class="bs" x="1064" y="480">dbt marts</text>
   <text class="bs" x="1064" y="496">analytics-ready</text>
   <path class="edge" d="M135 160 V178" marker-end="url(#arr)"/>

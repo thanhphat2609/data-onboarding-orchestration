@@ -1,8 +1,10 @@
 # dbt profile for the transformation DAGs. The profile name must match `profile:` in the transformation repository's
 # dbt_project.yml. The DuckDB file lives on the dbt-duckdb volume; DuckDB allows one writer, so the DAGs share the
 # pool `dbt_duckdb` (1 slot).
-# The lake is reached with a storage account key from the environment (AZURE_STORAGE_KEY, a GitHub secret written to
+# The lake is reached with a storage account key from the environment (ADLS_ACCOUNT_KEY, a GitHub secret written to
 # the VM's .env by the Deploy workflow), through azure:// paths: the key does not work with abfss://.
+# One name for the lake secret across the platform: ADLS_STORAGE_ACCOUNT and ADLS_ACCOUNT_KEY, as in data-onboarding-ingestion.
+# `AccountName=` / `AccountKey=` below are only the field names of the Azure connection-string format, not our variables.
 data_onboarding_transformation:
   target: default
   outputs:
@@ -13,5 +15,5 @@ data_onboarding_transformation:
       extensions: [httpfs, azure, parquet]
       secrets:
         - type: azure
-          connection_string: "DefaultEndpointsProtocol=https;AccountName={{ env_var('AZURE_STORAGE_ACCOUNT') }};AccountKey={{ env_var('AZURE_STORAGE_KEY') }};EndpointSuffix=core.windows.net"
+          connection_string: "DefaultEndpointsProtocol=https;AccountName={{ env_var('ADLS_STORAGE_ACCOUNT') }};AccountKey={{ env_var('ADLS_ACCOUNT_KEY') }};EndpointSuffix=core.windows.net"
       external_root: "{{ env_var('LAKE_CURATED_ROOT') }}"

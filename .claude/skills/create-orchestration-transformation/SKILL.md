@@ -18,8 +18,8 @@ Prototype scope: keep it small. One staging model, one intermediate model, one m
 2. `git fetch` in both, and base the branches on an up-to-date `main`.
 3. `gh auth status` works (needed only for step 5).
 4. The storage key is **not** needed in any file: for a local run it goes in the transformation repo's git-ignored `.env`
-   (`AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY`, `DBT_TARGET=azure_key`). Never write it into a tracked file, a commit,
-   a PR or a log. On the VM it comes from the GitHub secret `AZURE_STORAGE_KEY` (see `infrastructure/README.md`).
+   (`ADLS_STORAGE_ACCOUNT`, `ADLS_ACCOUNT_KEY`, `DBT_TARGET=azure_key`). Never write it into a tracked file, a commit,
+   a PR or a log. On the VM it comes from the GitHub secret `ADLS_ACCOUNT_KEY` (see `infrastructure/README.md`).
 
 ## 1. Ask which ingestion
 
@@ -83,7 +83,7 @@ In this repo: `python -m pytest -q` (validates the new file against the schema).
 
 Push both branches and open **draft** PRs, each linking the other, with the merge order stated: merge the
 transformation repo first, so the DAG never points at models that don't exist. PR text: what ingestion, which models,
-how it was verified (counts, tests), and that the VM needs the `AZURE_STORAGE_KEY` secret.
+how it was verified (counts, tests), and that the VM needs the `ADLS_ACCOUNT_KEY` secret.
 
 ## 6. Clean up (after the local runs, confirm first)
 
