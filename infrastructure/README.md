@@ -65,7 +65,7 @@ After a pull request from the Web UI is merged, run `git pull` in the Codespace:
 | `AIRFLOW_FERNET_KEY` | `python -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. Keep it: Airflow can't decrypt stored connections without it |
 | `AIRFLOW_JWT_SECRET` | `openssl rand -hex 32` |
 | `AIRFLOW_ADMIN_PASSWORD` | Airflow UI login `admin` |
-| `ADLS_ACCOUNT_KEY` | Key of the lake's storage account, read by the dbt profile of the transformation DAGs. Same secret as in data-onboarding-ingestion (one name for the lake key everywhere). Set once with `gh secret set ADLS_ACCOUNT_KEY`; to rotate, set it again and redeploy. Nothing is set by hand on the VM |
+| `ADLS_ACCOUNT_KEY` | Access key of the lake's storage account. Same name and value as in data-onboarding-ingestion (one name for the lake key everywhere). Read by the dbt profile of the transformation DAGs, and by the task `wait` on the scheduler to count a run's rows from the Parquet footers (without it a run is reported as `row count unavailable`). Set once with `gh secret set ADLS_ACCOUNT_KEY`; to rotate, set it again and redeploy. Nothing is set by hand on the VM |
 
 ### Variables
 
