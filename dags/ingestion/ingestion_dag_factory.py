@@ -34,6 +34,7 @@ from common.ingestion_jobs import (
     load_job,
     load_jobs,
 )
+from common.lake_rows import report_run
 from common.platform import START_DATE, TIMEZONE
 
 log = logging.getLogger(__name__)
@@ -142,13 +143,19 @@ def build_dag(jf: JobFile) -> DAG:
 
         # The last task publishes the table Asset that transformation DAGs are scheduled on (ADR-0004).
         @task(execution_timeout=timeout + timedelta(minutes=5), outlets=[ingestion_asset(jf.name)])
-        def wait(flink_job_id: str) -> str:
-            """Follows the Flink job until it ends; cancelled after runtime.timeout."""
-            return wait_for_job(flink_job_id, timeout)
+        def wait(flink_job_id: str, run: dict[str, Any]) -> dict[str, Any]:
+            """Follows the Flink job until it ends (cancelled after runtime.timeout), then reports the rows it wrote.
+
+            The report is one log line: "Ingestion run for <date> with <n> Rows for table: <table> at <path>". A count
+            that can't be made is logged with its reason and doesn't fail the run.
+            """
+            state = wait_for_job(flink_job_id, timeout)
+            report = report_run(run["ingest_date"], jf.sink_uri, jf.job["sink"]["params"]["path"])
+            return {"state": state, **report}
 
         run = validate()
         # The source template decides: `fetch: rest_api` adds the fetch task (ingestion ADR-0015).
-        wait(submit(fetch(run) if jf.fetcher else run))
+        wait(submit(fetch(run) if jf.fetcher else run), run)
 
     return dag
 
