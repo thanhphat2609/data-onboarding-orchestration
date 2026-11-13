@@ -1,0 +1,14 @@
+kind: IngestionJob
+name: sqlserver-crm-segments-manual
+owner: data-team
+connection: crm-sqlserver-nonprod
+source:
+  query: |
+    SELECT segment_id, segment_name
+    FROM segments
+sink:
+  template: adls_parquet@1
+  params:
+    target_file_size_mb: 128
+    storage_account: dataonboardingplatform
+    path: sqlserver/crm/segment
