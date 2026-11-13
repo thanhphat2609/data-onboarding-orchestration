@@ -35,9 +35,28 @@ Where a step belongs to another repository, the repository is named.
    first real test; if it fails on the driver or a type, switch to the fallback below.
 2. [ ] Docs, one place per change: this plan; an ADR here only if a real decision comes out of step 1; a short note
    in data-onboarding-ingestion if the runner changes; a README for the demo model in data-onboarding-transformation.
-3. [ ] Connection file `pipelines/connections/<name>-connection.yaml` and job file `pipelines/jobs/<name>.yaml` for
+3. [x] Connection file `pipelines/connections/<name>-connection.yaml` and job file `pipelines/jobs/<name>.yaml` for
    the SQL Server table, in the same shape as `shop-mysql-connection` and `mysql-shop-customers-manual`.
-4. [ ] Run the ingestion once; check the Parquet table on ADLS Gen2 and the row count the task `wait` reports.
+4. [x] Run the ingestion once; check the Parquet table on ADLS Gen2 and the row count the task `wait` reports.
+   Result (2026-11-13): this was indeed the first real test on a cluster, and it found three separate bugs, all fixed:
+   - **Submit-time vs. execution-time need different hosts for the same server.** Flink's JobManager and the
+     TaskManagers of this prod cluster run on two different VMs with no network route between them (ADR-0007/0012):
+     the JobManager resolves demo source names through Docker DNS on VM 1's `data-platform` network; the remote
+     TaskManager (VM 2) cannot reach that network at all, and needs a `/etc/hosts` entry pointing the same name at
+     VM 1's public IP instead (`extra_hosts` in `data-onboarding-ingestion`'s `vm2/docker-compose.yml` - fixed there
+     for `mysql-source`/`postgres-source` already, just missing for `sqlserver-source`). Pointing the connection's
+     `host` at VM 1's public IP directly (the obvious-looking fix) breaks the *other* side: a VM cannot reach its own
+     public IP from inside itself, so the JobManager's own JDBC preflight then times out.
+   - **DuckDB's azure extension can't reach the lake at all** from the row-count check in `dags/common/lake_rows.py`
+     ("Problem with the SSL CA cert"), for the same reason dbt needed the curl-transport fix (commits `d7d45ef`,
+     `cd6cd80`, `8a38c00`): that script runs its own separate DuckDB connection and never set
+     `azure_transport_option_type = 'curl'`.
+   - **DuckDB's azure extension can't list a Hierarchical Namespace (ADLS Gen2) container either**, even with the
+     curl transport (`json.exception.type_error.302` on the directory-marker blobs HNS adds) - and Flink's sink
+     doesn't name its output files `*.parquet` anyway (just `part-<uuid>-task-N-file-M`), so the old glob never
+     matched anything on any source, SQL Server or not; it just silently fell into "row count unavailable" and
+     nobody noticed because counting is designed to never fail a run. Fixed by listing the partition directly over
+     the plain Blob List REST API (stdlib only) and handing DuckDB the exact file paths instead of a glob.
 5. [ ] dbt model in data-onboarding-transformation that reads the SQL Server table.
 6. [ ] `pipelines/transformations/<name>.yaml` with `after: - ingestion: <job>`. The directory is empty today.
 7. [ ] Check that a finished ingestion run starts the transformation DAG by itself (the Asset `ingest__<job>`).

@@ -4,10 +4,11 @@ template: sqlserver@1
 owner: de-team
 params:
   trust_server_certificate: true
-  # The Flink TaskManager runs on a separate VM with no route to VM 1's internal
-  # Docker network, so this must be VM 1's public IP (the demo source container
-  # publishes 1433 there), not the Docker-internal name "sqlserver-source".
-  host: 52.186.170.204
+  # The submit step's JDBC preflight runs on the JobManager (VM 1), which resolves
+  # this via Docker DNS; the job itself runs on a separate worker VM, which needs a
+  # /etc/hosts entry mapping this name to VM 1's public IP (Azure VMs can't reach
+  # their own public IP, so that IP can't go here directly - see commit history).
+  host: sqlserver-source
   database: crm
   username: svc_ingest_ro
   password: env://CRM_SQLSERVER_RO_PASSWORD
