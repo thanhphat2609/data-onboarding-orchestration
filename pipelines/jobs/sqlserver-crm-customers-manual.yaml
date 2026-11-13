@@ -1,0 +1,14 @@
+kind: IngestionJob
+name: sqlserver-crm-customers-manual
+owner: data-team
+connection: crm-sqlserver-nonprod
+source:
+  query: |
+    SELECT customer_id, full_name, email, segment_id, is_deleted, created_at, updated_at
+    FROM customers
+sink:
+  template: adls_parquet@1
+  params:
+    target_file_size_mb: 128
+    storage_account: dataonboardingplatform
+    path: sqlserver/crm/customers
