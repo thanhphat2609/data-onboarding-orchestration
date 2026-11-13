@@ -4,7 +4,10 @@ template: sqlserver@1
 owner: de-team
 params:
   trust_server_certificate: true
-  host: sqlserver-source
+  # The Flink TaskManager runs on a separate VM with no route to VM 1's internal
+  # Docker network, so this must be VM 1's public IP (the demo source container
+  # publishes 1433 there), not the Docker-internal name "sqlserver-source".
+  host: 0.0.0.0
   database: crm
   username: svc_ingest_ro
   password: env://CRM_SQLSERVER_RO_PASSWORD
