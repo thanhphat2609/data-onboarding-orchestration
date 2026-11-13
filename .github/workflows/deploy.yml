@@ -73,7 +73,7 @@ jobs:
             echo "::error::$sha is not on main"; exit 1
           fi
           if [[ "$MANUAL" == true ]]; then
-            green=$(gh run list --workflow CI --commit "$sha" --status success --json databaseId --jq length)
+            green=$(gh run list --workflow CI --commit "$sha" --json conclusion --jq '[.[] | select(.conclusion=="success")] | length')
             if [[ "$green" == 0 ]]; then
               echo "::error::No green CI run for $sha; wait for CI or fix it first"; exit 1
             fi
