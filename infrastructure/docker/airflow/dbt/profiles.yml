@@ -17,3 +17,9 @@ data_onboarding_transformation:
         - type: azure
           connection_string: "DefaultEndpointsProtocol=https;AccountName={{ env_var('ADLS_STORAGE_ACCOUNT') }};AccountKey={{ env_var('ADLS_ACCOUNT_KEY') }};EndpointSuffix=core.windows.net"
       external_root: "{{ env_var('LAKE_CURATED_ROOT') }}"
+      # The azure extension's default transport is its own statically linked libcurl, which doesn't search the
+      # system's CA bundle locations on Linux ("Problem with the SSL CA cert (path? access rights?)") regardless of
+      # SSL_CERT_FILE/SSL_CERT_DIR or CURL_CA_BUNDLE. Switching to the curl transport makes it search those
+      # locations, and honor CURL_CA_INFO/CURL_CA_PATH (duckdb.org/docs/core_extensions/azure).
+      settings:
+        azure_transport_option_type: curl
