@@ -4,7 +4,7 @@ template: sqlserver@1
 owner: de-team
 params:
   trust_server_certificate: true
-  host: sqlserver-source
+  host: sqlserver
   database: crm
   username: svc_ingest_ro
   password: env://CRM_SQLSERVER_RO_PASSWORD
