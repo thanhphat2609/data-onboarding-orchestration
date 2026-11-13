@@ -1,10 +1,17 @@
 """How many rows a run wrote, read from the Parquet files it left in the lake.
 
-The count is the sum of the row counts in the footers of the ``part-*.parquet`` files of one ``ingest_date=``
-partition, which DuckDB reads without scanning the data. DuckDB and its ``azure`` extension are in the dbt venv of the
-Airflow image (ADR-0004), so a short subprocess of that interpreter does the counting and nothing is added to Airflow's
-own environment. The Flink UI can't give this number: a job whose source and sink run in one chained task shows 0
+The count is the sum of the row counts in the footers of the files of one ``ingest_date=`` partition, which DuckDB
+reads without scanning the data. DuckDB and its ``azure`` extension are in the dbt venv of the Airflow image
+(ADR-0004), so a short subprocess of that interpreter does the counting and nothing is added to Airflow's own
+environment. The Flink UI can't give this number: a job whose source and sink run in one chained task shows 0
 records.
+
+Azure: the azure extension's default transport can't reach the lake at all ("Problem with the SSL CA cert"); the
+curl transport fixes that, the same way dbt's profiles.yml does (ADR: duckdb-azure-curl-transport). The files Flink's
+sink writes aren't named ``*.parquet`` (just ``part-<uuid>-task-N-file-M``), so a glob never matches them even once
+the transport works - and asking the azure extension to list a Hierarchical Namespace container itself hits a second
+bug (``json.exception.type_error.302``) on the directory-marker blobs HNS adds. Both are sidestepped by listing the
+partition over the plain Blob List REST API (stdlib only, Shared Key auth) and handing DuckDB the exact file paths.
 
 Counting never fails a run: when the count can't be made (no key, the storage can't be reached) the run is still
 reported, with the reason. No Airflow import.
@@ -29,18 +36,54 @@ _ABFSS = re.compile(r"^abfss://(?P<container>[^@/]+)@(?P<account>[^./]+)\.dfs\.c
 
 # Runs in the dbt venv. The key comes through the environment, never the command line, so `ps` doesn't show it.
 _SCRIPT = """
-import os, sys, duckdb
+import base64, hashlib, hmac, os, sys, urllib.request, urllib.parse
+from datetime import datetime, timezone
+from xml.etree import ElementTree
+import duckdb
+
+
+def list_partition_files(account, key, container, prefix):
+    \"\"\"Names of the real (non-zero-length) blobs directly under prefix - the HNS folder markers excluded.\"\"\"
+    now = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    headers = f"x-ms-date:{now}\\nx-ms-version:2021-08-06\\n"
+    resource = f"/{account}/{container}\\ncomp:list\\nprefix:{prefix}\\nrestype:container"
+    to_sign = f"GET\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n{headers}{resource}"
+    sig = base64.b64encode(hmac.new(base64.b64decode(key), to_sign.encode(), hashlib.sha256).digest()).decode()
+    url = (
+        f"https://{account}.blob.core.windows.net/{container}?comp=list&restype=container"
+        f"&prefix={urllib.parse.quote(prefix, safe='')}"
+    )
+    request = urllib.request.Request(
+        url,
+        headers={"x-ms-date": now, "x-ms-version": "2021-08-06", "Authorization": f"SharedKey {account}:{sig}"},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        root = ElementTree.fromstring(response.read())
+    found = []
+    for blob in root.iter("Blob"):
+        name = blob.findtext("Name")
+        length = int(blob.findtext("Properties/Content-Length", "0"))
+        rest = name[len(prefix):].lstrip("/")
+        if length > 0 and rest and "/" not in rest:
+            found.append(name)
+    return found
+
 
 con = duckdb.connect()
 key = os.environ.get("LAKE_ACCOUNT_KEY")
 if key:
-    account = os.environ["LAKE_ACCOUNT"]
+    account, container, prefix = os.environ["LAKE_ACCOUNT"], sys.argv[1], sys.argv[2]
     con.execute("LOAD azure")
+    con.execute("SET azure_transport_option_type = 'curl'")
     con.execute(
         "CREATE SECRET (TYPE AZURE, CONNECTION_STRING "
         f"'AccountName={account};AccountKey={key};EndpointSuffix=core.windows.net')"
     )
-print(con.execute("SELECT count(*) FROM read_parquet(?)", [sys.argv[1]]).fetchone()[0])
+    files = list_partition_files(account, key, container, prefix)
+    paths = [f"abfss://{container}@{account}.dfs.core.windows.net/{name}" for name in files]
+    print(con.execute("SELECT count(*) FROM read_parquet(?)", [paths]).fetchone()[0] if paths else 0)
+else:
+    print(con.execute("SELECT count(*) FROM read_parquet(?)", [sys.argv[1]]).fetchone()[0])
 """
 
 
@@ -77,9 +120,16 @@ def count_rows(location: str, account_key: str | None = None, python: str | None
         "LAKE_ACCOUNT": account or "",
         "LAKE_ACCOUNT_KEY": account_key if account and account_key else "",
     }
+    # Azure: container and the partition prefix, for the script's own blob listing. Local: the glob DuckDB reads.
+    if account:
+        found = _ABFSS.match(location)
+        assert found  # _duckdb_location already matched this URI to find the account
+        args = [found["container"], found["path"].rstrip("/")]
+    else:
+        args = [f"{where.rstrip('/')}/*.parquet"]
     try:
         done = subprocess.run(
-            [python or DUCKDB_PYTHON, "-c", _SCRIPT, f"{where.rstrip('/')}/*.parquet"],
+            [python or DUCKDB_PYTHON, "-c", _SCRIPT, *args],
             env=env,
             capture_output=True,
             text=True,
