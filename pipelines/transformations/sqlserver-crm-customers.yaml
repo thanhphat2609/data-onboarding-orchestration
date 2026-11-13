@@ -1,0 +1,8 @@
+kind: TransformationJob
+name: sqlserver-crm-customers
+owner: data-team
+after:
+  - ingestion: sqlserver-crm-customers-manual
+select: +crm_active_customers_by_segment
+runtime: {timeout: 1h, threads: 4}
+tags: [crm]
