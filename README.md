@@ -4,6 +4,12 @@ Airflow for the data onboarding platform: one DAG per ingestion job, and one DAG
 
 ![Architecture](docs/assets/architecture.svg)
 
+## Demo Video
+
+[![Orchestration + Ingestion + Transformation demo](https://img.youtube.com/vi/mqt1bk2nVeQ/0.jpg)](https://youtu.be/mqt1bk2nVeQ)
+
+End-to-end demo across the three repos: [data-onboarding-orchestration](https://github.com/thanhphat2609/data-onboarding-orchestration) (Airflow), [data-onboarding-ingestion](https://github.com/thanhphat2609/data-onboarding-ingestion) (Flink), and [data-onboarding-transformation](https://github.com/thanhphat2609/data-onboarding-transformation) (dbt).
+
 ## Repository layout
 
 ```
